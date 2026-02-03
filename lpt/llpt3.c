@@ -14,8 +14,8 @@ typedef struct luaL_IntegerConstant {
 } luaL_IntegerConstant;
 
 static const luaL_IntegerConstant C[] = {
- {   "DIM", DIM},
- {   "MAX_ORTHANT_LEVEL", MAX_ORTHANT_LEVEL},
+ {   "DIM", LPT3_DIM},
+ {   "MAX_ORTHANT_LEVEL", LPT3_MAX_ORTHANT_LEVEL},
  {   NULL, 0} };
 
 

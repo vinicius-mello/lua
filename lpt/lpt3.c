@@ -7,9 +7,6 @@ typedef uint32_t uint;
 typedef uint64_t ulong;
 typedef uint16_t ushort;
 
-#define DIM 3
-#define MAX_ORTHANT_LEVEL 16
-
 const int lpt3_table_sigma[48][3]={
   { 33, 10, 4 },
   { 35, 11, 5 },
@@ -389,7 +386,7 @@ const int lpt3_table_orth[48]={ 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 4,
 void lpt3_init(lpt3 *code, uchar sigperm)
 {
   code->u.level = 0;
-  code->u.sigperm = sigperm<<DIM;
+  code->u.sigperm = sigperm<<LPT3_DIM;
   code->u.orth_level = 0;
   code->u.orth[0] = 0;
   code->u.orth[1] = 0;
@@ -449,5 +446,5 @@ void lpt3_orthant_set(lpt3 *code, int i, uint orth)
 
 #define LPT(x) lpt3_##x
 typedef lpt3 lpt;
-
+#define DIM LPT3_DIM
 #include "lpt_inc.c"

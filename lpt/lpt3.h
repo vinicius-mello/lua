@@ -11,11 +11,10 @@ union lpt3_u
   uint64_t code;
   struct
   {
-    uint8_t valid : 1;
-    uint8_t leaf : 1;
+    uint8_t reserved : 3;
+    uint8_t orth_level : 5;
     uint8_t sigperm : 6;
     uint8_t level : 2;
-    uint8_t orth_level : 6;
     uint16_t orth[3];
   } u;
 };
@@ -23,6 +22,10 @@ union lpt3_u
 typedef union lpt3_u lpt3;
 
 #pragma pack(pop) // ok
+
+#define LPT3_DIM 3
+#define LPT3_MAX_ORTHANT_LEVEL 16
+
 
 void lpt3_init(lpt3 *code, uint8_t perm);
 uint64_t lpt3_tointeger(lpt3 code);

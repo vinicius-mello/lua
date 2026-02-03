@@ -11,9 +11,8 @@ union lpt2_u
   uint64_t code;
   struct
   {
-    uint8_t valid : 1;
-    uint8_t leaf : 1;
-    uint8_t sigperm : 6;
+    uint8_t reserved : 3;
+    uint8_t sigperm : 5;
     uint8_t level : 2;
     uint8_t orth_level : 6;
     uint32_t orth_x : 20;
@@ -24,6 +23,10 @@ union lpt2_u
 typedef union lpt2_u lpt2;
 
 #pragma pack(pop) // ok
+
+#define LPT2_DIM 2
+#define LPT2_MAX_ORTHANT_LEVEL 20
+
 
 typedef union lpt2_u lpt2;
 

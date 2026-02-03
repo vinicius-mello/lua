@@ -1,3 +1,6 @@
+#include <string.h>
+#include <stdlib.h>
+
 #define LPT_ABS(x) (((x) < 0) ? -(x) : (x))
 #define LPT_SGN(x) (((x) < 0) ? -1 : 1)
 
@@ -337,3 +340,138 @@ void LPT(print_simplex)(lpt code)
   printf(")");
 }
 
+#define LPT_PRESENT_BIT 0x8000000000000000ll
+#define LPT_LEAF_BIT    0x4000000000000000ll
+#define LPT_MARK_BIT    0x2000000000000000ll
+#define LPT_BITS_MASK (~0xE000000000000000ll)
+
+typedef struct {
+  lpt * slots;
+  size_t elements;
+  size_t buckets;
+} LPT(set);
+
+uint64_t LPT(hash)(lpt code) {
+  uint64_t x = LPT_BITS_MASK & code.code;
+  x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ll;
+  x = (x ^ (x >> 27)) * 0x94d049b13c66a8edll;
+  x = x ^ (x >> 31);
+  return x;
+}
+
+void LPT(set_reset) (LPT(set) *set)
+{
+  memset(set->slots, 0, set->buckets * sizeof(lpt));
+  set->elements = 0;
+}
+
+void LPT(set_new)(LPT(set) *set, size_t buckets)
+{
+  set->slots = (lpt *)calloc(buckets, sizeof(lpt));
+  set->elements = 0;
+  set->buckets = buckets;
+}
+
+void LPT(set_free)(LPT(set) *set)
+{
+  free(set->slots);
+  set->slots = NULL;
+  set->elements = 0;
+  set->buckets = 0;
+}
+
+void LPT(set_rehash)(LPT(set) *set, size_t new_buckets);
+
+bool LPT(set_insert)(LPT(set) *set, lpt code, bool leaf)
+{
+  float load_factor = (float)(set->elements) / (float)(set->buckets);
+  if (load_factor > 0.7f)
+    LPT(set_rehash)(set, set->buckets * 2);
+  size_t hash = (LPT(hash)(code)) % set->buckets;
+  while (set->slots[hash].code != 0)
+  {
+    if ((set->slots[hash].code & LPT_BITS_MASK)
+         == (code.code & LPT_BITS_MASK))
+      return false; // already present
+    hash = (hash + 1) % set->buckets;
+  }
+  set->slots[hash].code = code.code | (leaf ? LPT_LEAF_BIT : 0) | LPT_PRESENT_BIT;
+  set->elements++;
+  return true;
+}
+
+int LPT(set_find)(LPT(set) *set, lpt code)
+{
+  size_t hash = (LPT(hash)(code)) % set->buckets;
+  while (set->slots[hash].code != 0)
+  {
+    if ((set->slots[hash].code & LPT_BITS_MASK) 
+        == (code.code & LPT_BITS_MASK)) 
+      return (int)hash;
+    hash = (hash + 1) % set->buckets;
+  }
+  return -1; // not found
+}
+
+void LPT(set_rehash)(LPT(set) *set, size_t new_buckets)
+{
+  lpt *old_slots = set->slots;
+  size_t old_buckets = set->buckets;
+  set->slots = (lpt *)calloc(new_buckets, sizeof(lpt));
+  set->buckets = new_buckets;
+  set->elements = 0;
+  for (size_t i = 0; i < old_buckets; ++i)
+  {
+    if (old_slots[i].code & LPT_PRESENT_BIT)
+    {
+      bool leaf = (old_slots[i].code & LPT_LEAF_BIT) != 0;
+      lpt code = {old_slots[i].code & LPT_BITS_MASK};
+      LPT(set_insert)(set, code, leaf);
+    }
+  }
+  free(old_slots);
+}
+
+void LPT(set_mark)(LPT(set) *set, lpt code)
+{
+  int index = LPT(set_find)(set, code);
+  if (index >= 0)
+    set->slots[index].code |= LPT_MARK_BIT;
+}
+
+void LPT(set_unmark)(LPT(set) *set, lpt code)
+{
+  int index = LPT(set_find)(set, code);
+  if (index >= 0)
+    set->slots[index].code &= ~LPT_MARK_BIT;
+}
+
+bool LPT(set_is_marked)(LPT(set) *set, lpt code)
+{
+  int index = LPT(set_find)(set, code);
+  if (index >= 0)
+    return (set->slots[index].code & LPT_MARK_BIT) != 0;
+  return false;
+}
+
+void LPT(set_leaf)(LPT(set) *set, lpt code)
+{
+  int index = LPT(set_find)(set, code);
+  if (index >= 0)
+    set->slots[index].code |= LPT_LEAF_BIT;
+}
+
+void LPT(set_unleaf)(LPT(set) *set, lpt code)
+{
+  int index = LPT(set_find)(set, code);
+  if (index >= 0)
+    set->slots[index].code &= ~LPT_LEAF_BIT;
+}
+
+bool LPT(set_is_leaf)(LPT(set) *set, lpt code)
+{
+  int index = LPT(set_find)(set, code);
+  if (index >= 0)
+    return (set->slots[index].code & LPT_LEAF_BIT) != 0;
+  return false;
+}

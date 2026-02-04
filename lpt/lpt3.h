@@ -21,6 +21,9 @@ union lpt3_u
 
 typedef union lpt3_u lpt3;
 
+struct lpt3_tree_s;
+typedef struct lpt3_tree_s lpt3_tree;
+
 #pragma pack(pop) // ok
 
 #define LPT3_DIM 3
@@ -41,5 +44,10 @@ int lpt3_neighbor_bd(lpt3 code, int i, lpt3 *r);
 bool lpt3_neighbor(lpt3 code, int i, lpt3 *r);
 void lpt3_simplex(lpt3 code, double *s);
 void lpt3_print_simplex(lpt3 code);
+lpt3_tree * lpt3_tree_new(size_t buckets);
+void lpt3_tree_free(lpt3_tree *tree);
+bool lpt3_tree_is_leaf(lpt3_tree *tree, lpt3 code);
+void lpt3_tree_compat_bisect(lpt3_tree *tree, lpt3 code, void (*subdivided)(lpt3));
+void lpt3_tree_visit_leaf(lpt3_tree *tree, void (*visit)(lpt3));
 
 #endif // LPT3_H

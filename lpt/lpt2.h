@@ -30,6 +30,9 @@ typedef union lpt2_u lpt2;
 
 typedef union lpt2_u lpt2;
 
+struct lpt2_tree_s;
+typedef struct lpt2_tree_s lpt2_tree;
+
 void lpt2_init(lpt2 *code, uint8_t perm);
 uint64_t lpt2_tointeger(lpt2 code);
 lpt2 lpt2_frominteger(uint64_t code);
@@ -44,5 +47,10 @@ int lpt2_neighbor_bd(lpt2 code, int i, lpt2 *r);
 bool lpt2_neighbor(lpt2 code, int i, lpt2 *r);
 void lpt2_simplex(lpt2 code, double *s);
 void lpt2_print_simplex(lpt2 code);
+lpt2_tree * lpt2_tree_new(size_t buckets);
+void lpt2_tree_free(lpt2_tree *tree);
+bool lpt2_tree_is_leaf(lpt2_tree *tree, lpt2 code);
+void lpt2_tree_compat_bisect(lpt2_tree *tree, lpt2 code, void (*subdivided)(lpt2));
+void lpt2_tree_visit_leaf(lpt2_tree *tree, void (*visit)(lpt2));
 
 #endif // LPT2_H

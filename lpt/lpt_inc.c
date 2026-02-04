@@ -4,6 +4,12 @@
 #define LPT_ABS(x) (((x) < 0) ? -(x) : (x))
 #define LPT_SGN(x) (((x) < 0) ? -1 : 1)
 
+#ifdef DEBUG
+#define debug(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
+#else
+#define debug(fmt, ...) ((void)0)
+#endif
+
 int LPT(orth)(lpt code)
 {
   return LPT(table_orth)[LPT(sigperm_get)(code)];
@@ -185,6 +191,7 @@ lpt LPT(parent)(lpt code)
 
 int LPT(neighbor_bd)(lpt code, int i, lpt *r)
 {
+  *r = (lpt){0};
   LPT(level_set)(r, LPT(level_get)(code));
   LPT(orthant_level_set)(r, LPT(orthant_level_get)(code));
   if (LPT(is_child0)(code))
@@ -340,16 +347,24 @@ void LPT(print_simplex)(lpt code)
   printf(")");
 }
 
+#if 1 
+#define LPT_PRESENT_BIT 0x0000000000000001ll
+#define LPT_LEAF_BIT    0x0000000000000002ll
+#define LPT_MARK_BIT    0x0000000000000004ll
+#define LPT_BITS_MASK (~0x0000000000000007ll)
+#else
 #define LPT_PRESENT_BIT 0x8000000000000000ll
 #define LPT_LEAF_BIT    0x4000000000000000ll
 #define LPT_MARK_BIT    0x2000000000000000ll
 #define LPT_BITS_MASK (~0xE000000000000000ll)
+#endif
 
-typedef struct {
+struct LPT(tree_s) {
   lpt * slots;
   size_t elements;
   size_t buckets;
-} LPT(set);
+};
+typedef struct LPT(tree_s) LPT(tree);
 
 uint64_t LPT(hash)(lpt code) {
   uint64_t x = LPT_BITS_MASK & code.code;
@@ -359,119 +374,320 @@ uint64_t LPT(hash)(lpt code) {
   return x;
 }
 
-void LPT(set_reset) (LPT(set) *set)
+bool LPT(tree_insert)(LPT(tree) *tree, lpt code, bool leaf, bool mark);
+
+LPT(tree) * LPT(tree_new)(size_t buckets)
 {
-  memset(set->slots, 0, set->buckets * sizeof(lpt));
-  set->elements = 0;
+  buckets = (buckets < 16) ? 16 : buckets;
+  LPT(tree) * tree = (LPT(tree) *)malloc(sizeof(LPT(tree)));  
+  tree->slots = (lpt *)calloc(buckets, sizeof(lpt));
+  tree->elements = 0;
+  tree->buckets = buckets;
+  lpt t;
+  static const int fact[5] = {1, 1, 2, 6, 24};
+  for(int i=0;i<fact[DIM];++i) {
+    LPT(init)(&t, i);
+    LPT(tree_insert)(tree, t, true, false);
+  }
+  return tree;
 }
 
-void LPT(set_new)(LPT(set) *set, size_t buckets)
+void LPT(tree_free)(LPT(tree) *tree)
 {
-  set->slots = (lpt *)calloc(buckets, sizeof(lpt));
-  set->elements = 0;
-  set->buckets = buckets;
+  free(tree->slots);
+  free(tree);
 }
 
-void LPT(set_free)(LPT(set) *set)
-{
-  free(set->slots);
-  set->slots = NULL;
-  set->elements = 0;
-  set->buckets = 0;
-}
+void LPT(tree_rehash)(LPT(tree) *tree, size_t new_buckets);
 
-void LPT(set_rehash)(LPT(set) *set, size_t new_buckets);
-
-bool LPT(set_insert)(LPT(set) *set, lpt code, bool leaf)
+bool LPT(tree_insert)(LPT(tree) *tree, lpt code, bool leaf, bool mark)
 {
-  float load_factor = (float)(set->elements) / (float)(set->buckets);
+  float load_factor = (float)(tree->elements) / (float)(tree->buckets);
   if (load_factor > 0.7f)
-    LPT(set_rehash)(set, set->buckets * 2);
-  size_t hash = (LPT(hash)(code)) % set->buckets;
-  while (set->slots[hash].code != 0)
+    LPT(tree_rehash)(tree, tree->buckets * 2);
+  size_t hash = (LPT(hash)(code)) % tree->buckets;
+  while ((tree->slots[hash].code & LPT_PRESENT_BIT) != 0)
   {
-    if ((set->slots[hash].code & LPT_BITS_MASK)
+    if ((tree->slots[hash].code & LPT_BITS_MASK)
          == (code.code & LPT_BITS_MASK))
       return false; // already present
-    hash = (hash + 1) % set->buckets;
+    hash = (hash + 1) % tree->buckets;
   }
-  set->slots[hash].code = code.code | (leaf ? LPT_LEAF_BIT : 0) | LPT_PRESENT_BIT;
-  set->elements++;
+  tree->slots[hash].code = code.code 
+    | (leaf ? LPT_LEAF_BIT : 0) 
+    | (mark ? LPT_MARK_BIT : 0) 
+    | LPT_PRESENT_BIT;
+  tree->elements++;
   return true;
 }
 
-int LPT(set_find)(LPT(set) *set, lpt code)
+int LPT(tree_find)(LPT(tree) *tree, lpt code)
 {
-  size_t hash = (LPT(hash)(code)) % set->buckets;
-  while (set->slots[hash].code != 0)
+  size_t hash = (LPT(hash)(code)) % tree->buckets;
+  debug("Find hash: %zu\n", hash);
+  while ((tree->slots[hash].code & LPT_PRESENT_BIT) != 0)
   {
-    if ((set->slots[hash].code & LPT_BITS_MASK) 
+    debug("Comparing with slot %zu\n", hash);
+    debug("Searching for: ");
+    debug("Code bits: %016llx\n", code.code & LPT_BITS_MASK);
+    debug("Slot bits: %016llx\n", tree->slots[hash].code & LPT_BITS_MASK); 
+
+    if ((tree->slots[hash].code & LPT_BITS_MASK) 
         == (code.code & LPT_BITS_MASK)) 
       return (int)hash;
-    hash = (hash + 1) % set->buckets;
+    hash = (hash + 1) % tree->buckets;
   }
   return -1; // not found
 }
 
-void LPT(set_rehash)(LPT(set) *set, size_t new_buckets)
+void LPT(tree_rehash)(LPT(tree) *tree, size_t new_buckets)
 {
-  lpt *old_slots = set->slots;
-  size_t old_buckets = set->buckets;
-  set->slots = (lpt *)calloc(new_buckets, sizeof(lpt));
-  set->buckets = new_buckets;
-  set->elements = 0;
+  debug("Rehashing to %zu buckets\n", new_buckets);
+  lpt *old_slots = tree->slots;
+  size_t old_buckets = tree->buckets;
+  tree->slots = (lpt *)calloc(new_buckets, sizeof(lpt));
+  tree->buckets = new_buckets;
+  tree->elements = 0;
   for (size_t i = 0; i < old_buckets; ++i)
   {
-    if (old_slots[i].code & LPT_PRESENT_BIT)
+    if ((old_slots[i].code & LPT_PRESENT_BIT) != 0)
     {
       bool leaf = (old_slots[i].code & LPT_LEAF_BIT) != 0;
+      bool mark = (old_slots[i].code & LPT_MARK_BIT) != 0;
       lpt code = {old_slots[i].code & LPT_BITS_MASK};
-      LPT(set_insert)(set, code, leaf);
+      LPT(tree_insert)(tree, code, leaf, mark);
     }
   }
   free(old_slots);
 }
 
-void LPT(set_mark)(LPT(set) *set, lpt code)
+void LPT(tree_mark)(LPT(tree) *tree, lpt code)
 {
-  int index = LPT(set_find)(set, code);
+  int index = LPT(tree_find)(tree, code);
   if (index >= 0)
-    set->slots[index].code |= LPT_MARK_BIT;
+    tree->slots[index].code |= LPT_MARK_BIT;
 }
 
-void LPT(set_unmark)(LPT(set) *set, lpt code)
+void LPT(tree_unmark)(LPT(tree) *tree, lpt code)
 {
-  int index = LPT(set_find)(set, code);
+  int index = LPT(tree_find)(tree, code);
   if (index >= 0)
-    set->slots[index].code &= ~LPT_MARK_BIT;
+    tree->slots[index].code &= ~LPT_MARK_BIT;
 }
 
-bool LPT(set_is_marked)(LPT(set) *set, lpt code)
+/*
+void LPT(tree_unmark_all)(LPT(tree) *tree) 
 {
-  int index = LPT(set_find)(set, code);
+  for(size_t i=0;i<tree->buckets;++i) {
+    if((tree->slots[i].code & LPT_PRESENT_BIT) != 0)
+      tree->slots[i].code &= ~LPT_MARK_BIT;
+  }
+}
+*/
+
+bool LPT(tree_is_marked)(LPT(tree) *tree, lpt code)
+{
+  int index = LPT(tree_find)(tree, code);
   if (index >= 0)
-    return (set->slots[index].code & LPT_MARK_BIT) != 0;
+    return (tree->slots[index].code & LPT_MARK_BIT) != 0;
   return false;
 }
 
-void LPT(set_leaf)(LPT(set) *set, lpt code)
+void LPT(tree_leaf)(LPT(tree) *tree, lpt code)
 {
-  int index = LPT(set_find)(set, code);
+  int index = LPT(tree_find)(tree, code);
   if (index >= 0)
-    set->slots[index].code |= LPT_LEAF_BIT;
+    tree->slots[index].code |= LPT_LEAF_BIT;
 }
 
-void LPT(set_unleaf)(LPT(set) *set, lpt code)
+void LPT(tree_unleaf)(LPT(tree) *tree, lpt code)
 {
-  int index = LPT(set_find)(set, code);
+  int index = LPT(tree_find)(tree, code);
   if (index >= 0)
-    set->slots[index].code &= ~LPT_LEAF_BIT;
+    tree->slots[index].code &= ~LPT_LEAF_BIT;
 }
 
-bool LPT(set_is_leaf)(LPT(set) *set, lpt code)
+bool LPT(tree_is_leaf)(LPT(tree) *tree, lpt code)
 {
-  int index = LPT(set_find)(set, code);
+  int index = LPT(tree_find)(tree, code);
   if (index >= 0)
-    return (set->slots[index].code & LPT_LEAF_BIT) != 0;
+    return (tree->slots[index].code & LPT_LEAF_BIT) != 0;
   return false;
 }
+
+bool LPT(tree_exists)(LPT(tree) *tree, lpt code)
+{
+  int index = LPT(tree_find)(tree, code);
+  debug("Tree exists check for: ");
+  debug("Code bits: %016llx\n", code.code & LPT_BITS_MASK);
+  debug("\n"); 
+  debug("Find returned index: %d\n", index);
+  return index >= 0;
+}
+
+void LPT(tree_simple_bisect)(LPT(tree) *tree, lpt code)
+{
+  //assert(LPT(tree_exists)(tree, code) && LPT(tree_is_leaf)(tree, code))
+  LPT(tree_unleaf)(tree, code);
+  lpt c0 = LPT(child)(code, 0);
+  lpt c1 = LPT(child)(code, 1);
+  LPT(tree_insert)(tree, c0, true, false);
+  LPT(tree_insert)(tree, c1, true, false);
+}
+
+void LPT(tree_compat_bisect)(LPT(tree) *tree, lpt code, void (*subdivided)(lpt))
+{
+  LPT(tree_mark)(tree, code);
+  for(int i=0;i<=DIM;++i) {
+    if(i==DIM || i==LPT(level)(code)) continue;
+    lpt n;
+    if(LPT(neighbor)(code, i, &n)) {
+      debug("%016llx", n.code & LPT_BITS_MASK);
+      debug(" is neighbor of ");
+      debug("%016llx", code.code & LPT_BITS_MASK);
+      debug(" across face %d\n", i);
+      if(!LPT(tree_exists)(tree, n)) {
+        debug("Neighbor does not exist, bisecting parent\n");
+        lpt p = LPT(parent)(n);
+        LPT(tree_compat_bisect)(tree, p, subdivided);
+      }
+      if(LPT(tree_is_leaf)(tree, n) && !LPT(tree_is_marked)(tree, n)) {
+        debug("Neighbor is leaf and unmarked, bisecting neighbor\n");
+        LPT(tree_compat_bisect)(tree, n, subdivided);
+      }
+    }
+  }
+  LPT(tree_simple_bisect)(tree, code);
+  LPT(tree_unmark)(tree, code);
+  if(subdivided) subdivided(code);
+}
+
+int LPT(tree_neighbor_bd)(LPT(tree) *tree, lpt r, int i, lpt *n) {
+  int l=LPT(level)(r);
+  int p=LPT(neighbor_bd)(r, i, n);
+  if(p==0) {
+    if(i==DIM) {
+      lpt n0 = LPT(child)(*n, 0);
+      lpt r1 = LPT(child)(r, 1);
+      if(LPT(tree_exists)(tree, n0)) LPT(neighbor_bd)(r1, l, n);
+    } else if(i==l) {
+      lpt n0 = LPT(child)(*n, 0);
+      lpt r0 = LPT(child)(r, 0);
+      if(LPT(tree_exists)(tree, n0)) LPT(neighbor_bd)(r0, l, n);
+    } else {
+      if(!LPT(tree_exists)(tree, *n)) *n=LPT(parent)(*n);
+    }
+  }
+  return p;
+}
+ 
+bool LPT(tree_neighbor)(LPT(tree) *tree, lpt r, int i, lpt *n) {
+  return LPT(tree_neighbor_bd)(tree, r, i,n)==0;
+}
+
+int LPT(tree_neighbor_index)(LPT(tree) *tree, lpt r, lpt n) {
+  for(int j=0;j<=DIM;++j) {
+    lpt rr;
+    if(LPT(tree_neighbor)(tree, n, j, &rr)) {
+      if((rr.code & LPT_BITS_MASK) == (r.code & LPT_BITS_MASK))
+        return j;
+    }
+  }
+  return -1;
+}
+
+lpt LPT(find_root)(double * p, double * w) {
+  int a[DIM];
+  static const int fact[5]={1,1,2,6,24};
+  int key,i;
+  for(i=0;i<DIM;++i) a[i]=i;
+  for(int j=1;j<DIM;++j) {  //insertion sort
+    key=a[j];
+    i=j-1;
+    while(i>=0 && p[a[i]]<p[key]) { //descending order
+      a[i+1]=a[i];
+      i--;
+    }
+    a[i+1]=key;
+  }
+  int code=0;
+  for(i=0;i<DIM;++i) { // Lehmer code
+    int k=0;
+    for(int j=i+1;j<DIM;++j) if(a[j]<a[i]) ++k;
+    code+=fact[DIM-i-1]*k;
+  }
+  lpt r;
+  LPT(init)(&r, code);
+  w[0]=(1.0-p[a[1-1]])/2.0;
+  for(i=1;i<DIM;++i) w[i]=(p[a[i-1]]-p[a[(i+1)-1]])/2.0;
+  w[DIM]=(p[a[DIM-1]]+1.0)/2.0;
+  return r;
+}
+
+lpt LPT(tree_search_rec)(LPT(tree) *tree, double * p, lpt r, double * w) {
+  if(LPT(tree_is_leaf)(tree, r)) return r;
+  int l=LPT(level)(r);
+  if(w[l]<=w[DIM]) {
+    double t=w[l];
+    w[l]=2.0*w[l];
+    w[DIM]=w[DIM]-t;
+    return LPT(tree_search_rec)(tree, p, LPT(child)(r, 0), w);
+  } else {
+    double t=w[DIM];
+    w[l]=w[l]-t;
+    for(int i=DIM;i>l;--i) w[i]=w[i-1];
+    w[l]=2.0*t;
+    return LPT(tree_search_rec)(tree, p, LPT(child)(r, 1), w);
+  }
+}
+
+lpt LPT(tree_search_w)(LPT(tree) *tree, double * p, double * w) {
+  lpt r=LPT(find_root)(p,w);
+  return LPT(tree_search_rec)(tree, p, r, w);
+}
+
+lpt LPT(tree_search)(LPT(tree) *tree, double * p) {
+  double w[DIM+1];
+  return LPT(tree_search_w)(tree, p, w);
+}
+
+#define delete_bit(byte, i) (((byte>>1)&((~0u)<<i))|((~((~0u)<<i))&byte))
+#define insert_bit(byte, i) (((((~0u)<<i)&byte)<<1)|((~((~0u)<<i))&byte))
+
+void LPT(tree_search_all_rec)(LPT(tree) *tree, lpt r, unsigned int faces, void (*visit)(lpt)) {
+  LPT(tree_mark)(tree, r);
+  for(unsigned int i=0;i<=DIM;++i) {
+    if((faces & (1<<i))!=0) continue;
+    lpt n;
+    if(LPT(tree_neighbor)(tree, r, i, &n)) {
+      if(!LPT(tree_is_marked)(tree, n)) {
+        int k = LPT(tree_neighbor_index)(tree, r, n);
+        unsigned int new_faces =
+          insert_bit(delete_bit(faces,i), k);
+        LPT(tree_search_all_rec)(tree, n, new_faces, visit);
+      }
+    }
+  }
+  visit(r);
+  LPT(tree_unmark)(tree, r);
+}
+
+void LPT(tree_search_all)(LPT(tree) *tree, double * p, void (*visit)(lpt)) {
+  double w[DIM+1];
+  lpt r=LPT(tree_search_w)(tree, p, w);
+  unsigned int faces=0;
+  for(int i=0;i<=DIM;++i) if(w[i]!=0.0) faces+= (1<<i);
+  LPT(tree_search_all_rec)(tree, r, faces, visit);
+}
+
+void LPT(tree_visit_leaf)(LPT(tree) *tree, void (*visit)(lpt))
+{
+  for(size_t i=0;i<tree->buckets;++i) {
+    if(tree->slots[i].code & (LPT_LEAF_BIT)) {
+      lpt code = {tree->slots[i].code & LPT_BITS_MASK};
+      debug("Visiting slot: %zu\t", i);
+      visit(code);
+    }
+  }
+}
+

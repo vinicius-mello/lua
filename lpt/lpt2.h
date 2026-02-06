@@ -49,8 +49,10 @@ void lpt2_simplex(lpt2 code, double *s);
 void lpt2_print_simplex(lpt2 code);
 lpt2_tree * lpt2_tree_new(size_t buckets);
 void lpt2_tree_free(lpt2_tree *tree);
+void lpt2_tree_print_stats(lpt2_tree *tree);
+void lpt2_tree_compat_bisect(lpt2_tree *tree, lpt2 code, void (*subdivided)(lpt2,void*), void *udata);
 bool lpt2_tree_is_leaf(lpt2_tree *tree, lpt2 code);
-void lpt2_tree_compat_bisect(lpt2_tree *tree, lpt2 code, void (*subdivided)(lpt2));
-void lpt2_tree_visit_leaf(lpt2_tree *tree, void (*visit)(lpt2));
+void lpt2_tree_visit_leafs(lpt2_tree *tree, void (*visit)(lpt2,void*), void *udata);
+void lpt2_tree_search_all(lpt2_tree *tree, double * p, void (*visit)(lpt2,void*), void *udata);
 
 #endif // LPT2_H

@@ -1,15 +1,31 @@
 package.cpath = "./?.so;" .. package.cpath
 array = require "array"
 lpt = require "lpt2"
+queue = require "queue"
 
-local root = {}
+local t = lpt.tree(1024)
+local r = t:search_all(array.double{1,-1})
+local q = queue.new()
+q:pushright(r[1])
 
-for i=1,2 do 
-  root[i] = lpt.init(i-1)
+while not q:empty() do
+  local node = q:popleft()
+  if t:is_leaf(node) and lpt.simplex_level(node) < 1 then
+    local subdivided = t:compat_bisect(node)
+    for i = 1,#subdivided do
+      q:pushright(lpt.child(subdivided[i], 0))
+      q:pushright(lpt.child(subdivided[i], 1))
+    end
+  end
 end
 
-s = array.double { rows = lpt.DIM+1, cols = lpt.DIM }
+--local l = t:search_all(array.double{0,0})
 
-lpt.simplex(lpt.child(root[2], 0), s)
+local l = t:leafs()
+for s = 1,#l do
+  print("Simplex "..s)
+  lpt.print_simplex(l[s])
+  print("")
+end
 
-print(s)
+t:print_stats()

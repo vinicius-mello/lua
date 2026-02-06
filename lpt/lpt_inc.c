@@ -378,6 +378,7 @@ bool LPT(tree_insert)(LPT(tree) *tree, lpt code, bool leaf, bool mark);
 
 LPT(tree) * LPT(tree_new)(size_t buckets)
 {
+  debug("enter tree_new: buckets: %zu\n", buckets);
   buckets = (buckets < 16) ? 16 : buckets;
   LPT(tree) * tree = (LPT(tree) *)malloc(sizeof(LPT(tree)));  
   tree->slots = (lpt *)calloc(buckets, sizeof(lpt));
@@ -389,19 +390,42 @@ LPT(tree) * LPT(tree_new)(size_t buckets)
     LPT(init)(&t, i);
     LPT(tree_insert)(tree, t, true, false);
   }
+  debug("exit tree_new\n");
   return tree;
+}
+
+void LPT(tree_print_stats)(LPT(tree) *tree)
+{
+  size_t used = 0;
+  size_t leaf = 0;
+  for (size_t i = 0; i < tree->buckets; ++i)
+  {
+    if ((tree->slots[i].code & LPT_PRESENT_BIT) != 0)
+      used++;
+    if ((tree->slots[i].code & LPT_LEAF_BIT) != 0)
+      leaf++;
+  }
+  printf("LPT Tree stats:\n");
+  printf("  Buckets: %zu\n", tree->buckets);
+  printf("  Elements: %zu\n", tree->elements);
+  printf("  Used slots: %zu\n", used);
+  printf("  Leaf slots: %zu\n", leaf);
+  printf("  Load factor: %.2f\n", (float)(tree->elements) / (float)(tree->buckets));
 }
 
 void LPT(tree_free)(LPT(tree) *tree)
 {
+  debug("enter tree_free\n");
   free(tree->slots);
   free(tree);
+  debug("exit tree_free\n");
 }
 
 void LPT(tree_rehash)(LPT(tree) *tree, size_t new_buckets);
 
 bool LPT(tree_insert)(LPT(tree) *tree, lpt code, bool leaf, bool mark)
 {
+  debug("enter tree_insert: code %016lx, leaf %d, mark %d\n", code.code, leaf, mark);
   float load_factor = (float)(tree->elements) / (float)(tree->buckets);
   if (load_factor > 0.7f)
     LPT(tree_rehash)(tree, tree->buckets * 2);
@@ -409,8 +433,10 @@ bool LPT(tree_insert)(LPT(tree) *tree, lpt code, bool leaf, bool mark)
   while ((tree->slots[hash].code & LPT_PRESENT_BIT) != 0)
   {
     if ((tree->slots[hash].code & LPT_BITS_MASK)
-         == (code.code & LPT_BITS_MASK))
+         == (code.code & LPT_BITS_MASK)) {
+      debug("exit tree_insert: already present\n");
       return false; // already present
+    }
     hash = (hash + 1) % tree->buckets;
   }
   tree->slots[hash].code = code.code 
@@ -418,31 +444,30 @@ bool LPT(tree_insert)(LPT(tree) *tree, lpt code, bool leaf, bool mark)
     | (mark ? LPT_MARK_BIT : 0) 
     | LPT_PRESENT_BIT;
   tree->elements++;
+  debug("exit tree_insert: inserted at slot %zu\n", hash);
   return true;
 }
 
 int LPT(tree_find)(LPT(tree) *tree, lpt code)
 {
+  debug("enter tree_find: code %016lx\n", code.code);
   size_t hash = (LPT(hash)(code)) % tree->buckets;
-  debug("Find hash: %zu\n", hash);
   while ((tree->slots[hash].code & LPT_PRESENT_BIT) != 0)
   {
-    debug("Comparing with slot %zu\n", hash);
-    debug("Searching for: ");
-    debug("Code bits: %016llx\n", code.code & LPT_BITS_MASK);
-    debug("Slot bits: %016llx\n", tree->slots[hash].code & LPT_BITS_MASK); 
-
     if ((tree->slots[hash].code & LPT_BITS_MASK) 
-        == (code.code & LPT_BITS_MASK)) 
+        == (code.code & LPT_BITS_MASK)) {
+      debug("exit tree_find: found at slot %zu\n", hash);
       return (int)hash;
+    }
     hash = (hash + 1) % tree->buckets;
   }
+  debug("exit tree_find: not found\n");
   return -1; // not found
 }
 
 void LPT(tree_rehash)(LPT(tree) *tree, size_t new_buckets)
 {
-  debug("Rehashing to %zu buckets\n", new_buckets);
+  debug("enter tree_rehash: %zu buckets\n", new_buckets);
   lpt *old_slots = tree->slots;
   size_t old_buckets = tree->buckets;
   tree->slots = (lpt *)calloc(new_buckets, sizeof(lpt));
@@ -459,20 +484,31 @@ void LPT(tree_rehash)(LPT(tree) *tree, size_t new_buckets)
     }
   }
   free(old_slots);
+  debug("exit tree_rehash\n");
 }
 
 void LPT(tree_mark)(LPT(tree) *tree, lpt code)
 {
+  debug("enter tree_mark: code %016lx\n", code.code);
   int index = LPT(tree_find)(tree, code);
-  if (index >= 0)
+  if (index >= 0) {
     tree->slots[index].code |= LPT_MARK_BIT;
+    debug("exit tree_mark\n");
+  } else {
+    debug("exit tree_mark: code not found\n");
+  }
 }
 
 void LPT(tree_unmark)(LPT(tree) *tree, lpt code)
 {
+  debug("enter tree_unmark: code %016lx\n", code.code);
   int index = LPT(tree_find)(tree, code);
-  if (index >= 0)
+  if (index >= 0) {
     tree->slots[index].code &= ~LPT_MARK_BIT;
+    debug("exit tree_unmark\n");
+  } else {
+    debug("exit tree_unmark: code not found\n");
+  } 
 }
 
 /*
@@ -487,41 +523,57 @@ void LPT(tree_unmark_all)(LPT(tree) *tree)
 
 bool LPT(tree_is_marked)(LPT(tree) *tree, lpt code)
 {
+  debug("enter tree_is_marked: code %016lx\n", code.code);
   int index = LPT(tree_find)(tree, code);
-  if (index >= 0)
+  if (index >= 0) {
+    debug("exit tree_is_marked: found\n");
     return (tree->slots[index].code & LPT_MARK_BIT) != 0;
+  }
+  debug("exit tree_is_marked: not found\n");
   return false;
 }
 
 void LPT(tree_leaf)(LPT(tree) *tree, lpt code)
 {
+  debug("enter tree_leaf: code %016lx\n", code.code);
   int index = LPT(tree_find)(tree, code);
-  if (index >= 0)
+  if (index >= 0) { 
     tree->slots[index].code |= LPT_LEAF_BIT;
+    debug("exit tree_leaf\n");
+  } else {
+    debug("exit tree_leaf: code not found\n");
+  }
 }
 
 void LPT(tree_unleaf)(LPT(tree) *tree, lpt code)
 {
+  debug("enter tree_unleaf: code %016lx\n", code.code);
   int index = LPT(tree_find)(tree, code);
-  if (index >= 0)
+  if (index >= 0) {
     tree->slots[index].code &= ~LPT_LEAF_BIT;
+    debug("exit tree_unleaf\n");
+  } else {
+    debug("exit tree_unleaf: code not found\n");
+  } 
 }
 
 bool LPT(tree_is_leaf)(LPT(tree) *tree, lpt code)
 {
+  debug("enter tree_is_leaf: code %016lx\n", code.code);
   int index = LPT(tree_find)(tree, code);
-  if (index >= 0)
+  if (index >= 0) {
+    debug("exit tree_is_leaf: found\n");
     return (tree->slots[index].code & LPT_LEAF_BIT) != 0;
+  }   
+  debug("exit tree_is_leaf: not found\n");
   return false;
 }
 
 bool LPT(tree_exists)(LPT(tree) *tree, lpt code)
 {
+  debug("enter tree_exists: code %016lx\n", code.code);
   int index = LPT(tree_find)(tree, code);
-  debug("Tree exists check for: ");
-  debug("Code bits: %016llx\n", code.code & LPT_BITS_MASK);
-  debug("\n"); 
-  debug("Find returned index: %d\n", index);
+  debug("exit tree_exists: %s\n", index >= 0 ? "true" : "false");
   return index >= 0;
 }
 
@@ -535,31 +587,25 @@ void LPT(tree_simple_bisect)(LPT(tree) *tree, lpt code)
   LPT(tree_insert)(tree, c1, true, false);
 }
 
-void LPT(tree_compat_bisect)(LPT(tree) *tree, lpt code, void (*subdivided)(lpt))
+void LPT(tree_compat_bisect)(LPT(tree) *tree, lpt code, void (*subdivided)(lpt,void*), void *udata)
 {
   LPT(tree_mark)(tree, code);
   for(int i=0;i<=DIM;++i) {
     if(i==DIM || i==LPT(level)(code)) continue;
     lpt n;
     if(LPT(neighbor)(code, i, &n)) {
-      debug("%016llx", n.code & LPT_BITS_MASK);
-      debug(" is neighbor of ");
-      debug("%016llx", code.code & LPT_BITS_MASK);
-      debug(" across face %d\n", i);
       if(!LPT(tree_exists)(tree, n)) {
-        debug("Neighbor does not exist, bisecting parent\n");
         lpt p = LPT(parent)(n);
-        LPT(tree_compat_bisect)(tree, p, subdivided);
+        LPT(tree_compat_bisect)(tree, p, subdivided, udata);
       }
       if(LPT(tree_is_leaf)(tree, n) && !LPT(tree_is_marked)(tree, n)) {
-        debug("Neighbor is leaf and unmarked, bisecting neighbor\n");
-        LPT(tree_compat_bisect)(tree, n, subdivided);
+        LPT(tree_compat_bisect)(tree, n, subdivided, udata);
       }
     }
   }
   LPT(tree_simple_bisect)(tree, code);
   LPT(tree_unmark)(tree, code);
-  if(subdivided) subdivided(code);
+  if(subdivided) subdivided(code, udata);
 }
 
 int LPT(tree_neighbor_bd)(LPT(tree) *tree, lpt r, int i, lpt *n) {
@@ -597,6 +643,7 @@ int LPT(tree_neighbor_index)(LPT(tree) *tree, lpt r, lpt n) {
 }
 
 lpt LPT(find_root)(double * p, double * w) {
+  debug("enter find_root\n");
   int a[DIM];
   static const int fact[5]={1,1,2,6,24};
   int key,i;
@@ -621,40 +668,55 @@ lpt LPT(find_root)(double * p, double * w) {
   w[0]=(1.0-p[a[1-1]])/2.0;
   for(i=1;i<DIM;++i) w[i]=(p[a[i-1]]-p[a[(i+1)-1]])/2.0;
   w[DIM]=(p[a[DIM-1]]+1.0)/2.0;
+  debug("exit find_root\n");
   return r;
 }
 
 lpt LPT(tree_search_rec)(LPT(tree) *tree, double * p, lpt r, double * w) {
-  if(LPT(tree_is_leaf)(tree, r)) return r;
+  
+  debug("enter tree_search_rec: code %016lx\n", r.code);
+  if(LPT(tree_is_leaf)(tree, r)) {
+    debug("exit tree_search_rec: leaf found\n");
+    return r;
+  }
   int l=LPT(level)(r);
   if(w[l]<=w[DIM]) {
     double t=w[l];
     w[l]=2.0*w[l];
     w[DIM]=w[DIM]-t;
+    debug("going to child 0\n");
     return LPT(tree_search_rec)(tree, p, LPT(child)(r, 0), w);
   } else {
     double t=w[DIM];
     w[l]=w[l]-t;
     for(int i=DIM;i>l;--i) w[i]=w[i-1];
     w[l]=2.0*t;
+    debug("going to child 1\n");
     return LPT(tree_search_rec)(tree, p, LPT(child)(r, 1), w);
   }
 }
 
 lpt LPT(tree_search_w)(LPT(tree) *tree, double * p, double * w) {
+  debug("enter tree_search_w\n");
   lpt r=LPT(find_root)(p,w);
-  return LPT(tree_search_rec)(tree, p, r, w);
+  lpt result = LPT(tree_search_rec)(tree, p, r, w);
+  debug("exit tree_search_w\n");
+  return result;
 }
 
 lpt LPT(tree_search)(LPT(tree) *tree, double * p) {
+  debug("enter tree_search\n");
   double w[DIM+1];
-  return LPT(tree_search_w)(tree, p, w);
+  lpt r=LPT(tree_search_w)(tree, p, w);
+  debug("exit tree_search\n");
+  return r; 
 }
 
 #define delete_bit(byte, i) (((byte>>1)&((~0u)<<i))|((~((~0u)<<i))&byte))
 #define insert_bit(byte, i) (((((~0u)<<i)&byte)<<1)|((~((~0u)<<i))&byte))
 
-void LPT(tree_search_all_rec)(LPT(tree) *tree, lpt r, unsigned int faces, void (*visit)(lpt)) {
+void LPT(tree_search_all_rec)(LPT(tree) *tree, lpt r, unsigned int faces, void (*visit)(lpt,void*),void *udata) {
+  debug("enter tree_search_all_rec: code %016lx\n", r.code);
   LPT(tree_mark)(tree, r);
   for(unsigned int i=0;i<=DIM;++i) {
     if((faces & (1<<i))!=0) continue;
@@ -664,30 +726,36 @@ void LPT(tree_search_all_rec)(LPT(tree) *tree, lpt r, unsigned int faces, void (
         int k = LPT(tree_neighbor_index)(tree, r, n);
         unsigned int new_faces =
           insert_bit(delete_bit(faces,i), k);
-        LPT(tree_search_all_rec)(tree, n, new_faces, visit);
+        LPT(tree_search_all_rec)(tree, n, new_faces, visit, udata);
       }
     }
   }
-  visit(r);
+  debug("visiting code %016lx\n", r.code);
+  visit(r, udata);
   LPT(tree_unmark)(tree, r);
+  debug("exit tree_search_all_rec: code %016lx\n", r.code);
 }
 
-void LPT(tree_search_all)(LPT(tree) *tree, double * p, void (*visit)(lpt)) {
+void LPT(tree_search_all)(LPT(tree) *tree, double * p, void (*visit)(lpt,void*), void *udata) {
+  debug("enter tree_search_all\n");
   double w[DIM+1];
   lpt r=LPT(tree_search_w)(tree, p, w);
   unsigned int faces=0;
   for(int i=0;i<=DIM;++i) if(w[i]!=0.0) faces+= (1<<i);
-  LPT(tree_search_all_rec)(tree, r, faces, visit);
+  LPT(tree_search_all_rec)(tree, r, faces, visit, udata);
+  debug("exit tree_search_all\n");
 }
 
-void LPT(tree_visit_leaf)(LPT(tree) *tree, void (*visit)(lpt))
+void LPT(tree_visit_leafs)(LPT(tree) *tree, void (*visit)(lpt,void*), void *udata)
 {
+  debug("enter tree_visit_leafs\n");
   for(size_t i=0;i<tree->buckets;++i) {
     if(tree->slots[i].code & (LPT_LEAF_BIT)) {
       lpt code = {tree->slots[i].code & LPT_BITS_MASK};
       debug("Visiting slot: %zu\t", i);
-      visit(code);
+      visit(code, udata);
     }
   }
+  debug("exit tree_visit_leafs\n");
 }
 

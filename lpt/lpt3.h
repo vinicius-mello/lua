@@ -46,8 +46,9 @@ void lpt3_simplex(lpt3 code, double *s);
 void lpt3_print_simplex(lpt3 code);
 lpt3_tree * lpt3_tree_new(size_t buckets);
 void lpt3_tree_free(lpt3_tree *tree);
+void lpt3_tree_compat_bisect(lpt3_tree *tree, lpt3 code, void (*subdivided)(lpt3,void*), void *udata);
 bool lpt3_tree_is_leaf(lpt3_tree *tree, lpt3 code);
-void lpt3_tree_compat_bisect(lpt3_tree *tree, lpt3 code, void (*subdivided)(lpt3));
-void lpt3_tree_visit_leaf(lpt3_tree *tree, void (*visit)(lpt3));
+void lpt3_tree_visit_leafs(lpt3_tree *tree, void (*visit)(lpt3,void*), void *udata);
+void lpt3_tree_search_all(lpt3_tree *tree, double * p, void (*visit)(lpt3,void*), void *udata);
 
 #endif // LPT3_H

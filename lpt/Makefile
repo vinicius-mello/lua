@@ -6,8 +6,7 @@ LUA_BINDIR= $(LUA_TOPDIR)/bin
        LUA= $(LUA_BINDIR)/lua
 
 CFLAGS= -Wall -Wextra -Wfatal-errors -O2
-MYCFLAGS= $(CFLAGS) -I$(LUA_INCDIR) 
-# -DDEBUG
+MYCFLAGS= $(CFLAGS) -I$(LUA_INCDIR) -DDEBUG
 
 all: lpt2.so lpt3.so
 

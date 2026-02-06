@@ -2,12 +2,12 @@
 #include "lpt2.h"
 #include "lpt3.h"
 
-void visit_cb(lpt2 code) {
+void visit_cb(lpt2 code, void *udata) {
     lpt2_print_simplex(code);
     printf("\n");
 }
 
-void subdivided_cb(lpt2 code) {
+void subdivided_cb(lpt2 code, void *udata) {
     printf("Subdivided: ");
     lpt2_print_simplex(code);
     printf("\n");
@@ -19,16 +19,9 @@ int main()
 
     printf("sizeof(lpt2) = %zu bytes\n", sizeof(lpt2));
     printf("sizeof(lpt3) = %zu bytes\n", sizeof(lpt3));
-    lpt2 code2;
-    lpt2_init(&code2, 0);
     lpt2_tree * tree2 = lpt2_tree_new(0);
-    lpt2_tree_visit_leaf(tree2, visit_cb);
-    printf("Subdividing LPT2 root simplex\n");
-    lpt2_print_simplex(code2);
-    printf("\n");
-    lpt2_tree_compat_bisect(tree2, code2, subdivided_cb);
-    printf("LPT2 tree created and bisected\n");
-    lpt2_tree_visit_leaf(tree2, visit_cb);
+    lpt2_tree_search_all(tree2, (double[]){0.0, 0.0}, visit_cb, NULL);
+    lpt2_tree_visit_leafs(tree2, visit_cb, NULL);
     lpt2_tree_free(tree2);
     
     return 0;

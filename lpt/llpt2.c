@@ -107,6 +107,64 @@ static int FPrintSimplex(lua_State *L) {
   return 0;
 }
 
+static int Ftree_new(lua_State *L) {
+  size_t buckets = (size_t)luaL_checkinteger(L, 1);
+  lpt2_tree **	t=lua_newuserdata(L,sizeof(lpt2_tree*));
+  luaL_setmetatable(L,LIBTYPE);
+  *t = lpt2_tree_new(buckets);
+  printf("%p\n", *t);
+  return 1;
+}
+
+static int Ftree_free(lua_State *L) {
+  lpt2_tree **t = (lpt2_tree **)lua_touserdata(L, 1);
+  lpt2_tree_free(*t);
+  return 0;
+}
+
+static void add_to_table_cb(lpt2 code, void *udata) {
+  lua_State *L = (lua_State *)udata;
+  lua_pushinteger(L, lpt2_tointeger(code));
+  lua_rawseti(L, -2, lua_rawlen(L, -2) + 1);
+}
+
+static int Ftree_search_all(lua_State *L) {
+  lpt2_tree **t = (lpt2_tree **)lua_touserdata(L, 1);
+  array *s = (array *)luaL_checkudata(L, 2, "array");
+  lua_newtable(L);
+  lpt2_tree_search_all(*t, (double *)s->ptr, add_to_table_cb, L);
+  return 1;
+}
+
+static int Ftree_compat_bisect(lua_State *L) {
+  lpt2_tree **t = (lpt2_tree **)lua_touserdata(L, 1);
+  lpt2 code = lpt2_frominteger(luaL_checkinteger(L, 2));
+  lua_newtable(L);
+  lpt2_tree_compat_bisect(*t, code, add_to_table_cb, L);
+  return 1;
+}
+
+static int Fleafs(lua_State *L) {
+  lpt2_tree **t = (lpt2_tree **)lua_touserdata(L, 1);
+  lua_newtable(L);
+  lpt2_tree_visit_leafs(*t, add_to_table_cb, L);
+  return 1;
+} 
+
+static int Ftree_is_leaf(lua_State *L) {
+  lpt2_tree **t = (lpt2_tree **)lua_touserdata(L, 1);
+  lpt2 code = lpt2_frominteger(luaL_checkinteger(L, 2));
+  bool is_leaf = lpt2_tree_is_leaf(*t, code);
+  lua_pushboolean(L, is_leaf);
+  return 1;
+}
+
+static int Ftree_print_stats(lua_State *L) {
+  lpt2_tree **t = (lpt2_tree **)lua_touserdata(L, 1);
+  lpt2_tree_print_stats(*t);
+  return 0;
+}
+
 static const luaL_Reg R[] =
 {
     { "init", FInit },
@@ -121,6 +179,13 @@ static const luaL_Reg R[] =
     { "neighbor", FNeighbor },
     { "simplex", FSimplex },
     { "print_simplex", FPrintSimplex },
+    { "tree", Ftree_new },
+    { "search_all", Ftree_search_all },
+    { "compat_bisect", Ftree_compat_bisect },
+    { "is_leaf", Ftree_is_leaf },
+    { "leafs", Fleafs },
+    { "print_stats", Ftree_print_stats },
+    { "__gc", Ftree_free },
     { NULL,     NULL    }
 };
 

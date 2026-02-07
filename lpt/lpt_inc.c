@@ -220,7 +220,7 @@ int LPT(neighbor_bd)(lpt code, int i, lpt *r)
     else if (i == lstar)
     {
       int lminus = (LPT(level_get)(code) == 0) ? (DIM - 1) : (LPT(level_get)(code) - 1);
-      LPT(sigperm_set)(r, LPT(lft)(code, lminus));
+      LPT(sigperm_set)(r, LPT(rgt)(code, lminus));
     }
     else if (i == DIM)
     {
@@ -511,7 +511,6 @@ void LPT(tree_unmark)(LPT(tree) *tree, lpt code)
   } 
 }
 
-/*
 void LPT(tree_unmark_all)(LPT(tree) *tree) 
 {
   for(size_t i=0;i<tree->buckets;++i) {
@@ -519,7 +518,6 @@ void LPT(tree_unmark_all)(LPT(tree) *tree)
       tree->slots[i].code &= ~LPT_MARK_BIT;
   }
 }
-*/
 
 bool LPT(tree_is_marked)(LPT(tree) *tree, lpt code)
 {
@@ -732,7 +730,7 @@ void LPT(tree_search_all_rec)(LPT(tree) *tree, lpt r, unsigned int faces, void (
   }
   debug("visiting code %016lx\n", r.code);
   visit(r, udata);
-  LPT(tree_unmark)(tree, r);
+  //LPT(tree_unmark)(tree, r);
   debug("exit tree_search_all_rec: code %016lx\n", r.code);
 }
 
@@ -742,6 +740,7 @@ void LPT(tree_search_all)(LPT(tree) *tree, double * p, void (*visit)(lpt,void*),
   lpt r=LPT(tree_search_w)(tree, p, w);
   unsigned int faces=0;
   for(int i=0;i<=DIM;++i) if(w[i]!=0.0) faces+= (1<<i);
+  LPT(tree_unmark_all)(tree);
   LPT(tree_search_all_rec)(tree, r, faces, visit, udata);
   debug("exit tree_search_all\n");
 }

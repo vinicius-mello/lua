@@ -10,7 +10,7 @@ q:pushright(r[1])
 
 while not q:empty() do
   local node = q:popleft()
-  if t:is_leaf(node) and lpt.simplex_level(node) < 1 then
+  if t:is_leaf(node) and lpt.simplex_level(node) < 2 then
     local subdivided = t:compat_bisect(node)
     for i = 1,#subdivided do
       q:pushright(lpt.child(subdivided[i], 0))
@@ -19,9 +19,9 @@ while not q:empty() do
   end
 end
 
---local l = t:search_all(array.double{0,0})
+local l = t:search_all(array.double{1,1})
 
-local l = t:leafs()
+--local l = t:leafs()
 for s = 1,#l do
   print("Simplex "..s)
   lpt.print_simplex(l[s])

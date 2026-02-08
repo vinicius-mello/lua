@@ -159,4 +159,5 @@ void lpt2_orthant_set(lpt2 *code, int i, uint orth)
 #define LPT(x) lpt2_##x
 typedef lpt2 lpt;
 #define DIM LPT2_DIM
+#define MAX_ORTHANT_LEVEL LPT2_MAX_ORTHANT_LEVEL
 #include "lpt_inc.c"

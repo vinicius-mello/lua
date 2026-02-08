@@ -447,4 +447,5 @@ void lpt3_orthant_set(lpt3 *code, int i, uint orth)
 #define LPT(x) lpt3_##x
 typedef lpt3 lpt;
 #define DIM LPT3_DIM
+#define MAX_ORTHANT_LEVEL LPT3_MAX_ORTHANT_LEVEL
 #include "lpt_inc.c"

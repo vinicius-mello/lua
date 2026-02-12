@@ -1,3 +1,5 @@
+typedef unsigned int uint;
+typedef unsigned long ulong;
 
 ulong morton21(uint x, uint y, uint z)
 {
@@ -30,3 +32,22 @@ void unmorton21(ulong code, uint *x, uint *y, uint *z)
   }
 }
 
+ulong morton_encode(int dim, double *p) {
+  double x = p[0];
+  double y = p[1];
+  double z = dim == 3 ? p[2] : 0.0;
+  x=(1<<19)*(x+1.0);
+  y=(1<<19)*(y+1.0);
+  z=(1<<19)*(z+1.0);
+  ulong code = morton21((uint)x, (uint)y, (uint)z);
+  return code;
+}
+
+void morton_decode(ulong code, int dim, double *p) {
+  uint x, y, z;
+  unmorton21(code, &x, &y, &z);
+  p[0] = ((double)x)/(1<<19)-1.0;
+  p[1] = ((double)y)/(1<<19)-1.0;
+  if(dim == 3)
+    p[2] = ((double)z)/(1<<19)-1.0;
+}

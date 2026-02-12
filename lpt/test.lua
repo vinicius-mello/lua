@@ -2,30 +2,26 @@ package.cpath = "./?.so;" .. package.cpath
 array = require "array"
 lpt = require "lpt3"
 queue = require "queue"
-
 local t = lpt.tree(1024)
 t:print_stats()
 local r = t:search_all(array.double{1,1,1})
-t:print_stats()
 
 local q = queue.new()
 q:pushright(r[1])
 
 while not q:empty() do
   local node = q:popleft()
-  lpt.print_simplex(node)
-  print("")
-  if t:is_leaf(node) and lpt.simplex_level(node) < 2 then
-    print("Bisecting simplex...")
-    local subdivided = t:compat_bisect(node)
-    print("Subdivided into "..#subdivided.." simplex(s)")
-    for i = 1,#subdivided do
-      q:pushright(lpt.child(subdivided[i], 0))
-      q:pushright(lpt.child(subdivided[i], 1))
+  if t:is_leaf(node) and lpt.simplex_level(node) < 3 then
+    local r = t:compat_bisect(node)
+    for i = 1,#r.subdivided do
+      q:pushright(lpt.child(r.subdivided[i], 0))
+      q:pushright(lpt.child(r.subdivided[i], 1))
+    end
+    for i=1,#r.vertex_id do
+      print("New vertex "..r.vertex_id[i].." at ("..r.vertex_coord[i][1]..","..r.vertex_coord[i][2]..","..r.vertex_coord[i][3]..")")
     end
   end
 end
-t:print_stats()
 
 local l = t:search_all(array.double{1,1,1})
 

@@ -117,6 +117,18 @@ static void add_to_table_cb(lpt code, void *udata) {
   lua_rawseti(L, -2, lua_rawlen(L, -2) + 1);
 }
 
+static void add_vertex_cb(int vid, double *coords, void *udata) {
+  lua_State *L = (lua_State *)udata;
+  lua_pushinteger(L, vid);
+  lua_rawseti(L, -3, lua_rawlen(L, -3) + 1);
+  lua_newtable(L);
+  for(int j=0;j<DIM;++j) {
+    lua_pushnumber(L, coords[j]);
+    lua_rawseti(L, -2, j+1);  
+  }
+  lua_rawseti(L, -4, lua_rawlen(L, -4) + 1);
+}
+
 static int Ftree_search_all(lua_State *L) {
   LPT(tree) **t = (LPT(tree) **)lua_touserdata(L, 1);
   array *s = (array *)luaL_checkudata(L, 2, "array");
@@ -129,7 +141,22 @@ static int Ftree_compat_bisect(lua_State *L) {
   LPT(tree) **t = (LPT(tree) **)lua_touserdata(L, 1);
   lpt code = LPT(frominteger)(luaL_checkinteger(L, 2));
   lua_newtable(L);
-  LPT(tree_compat_bisect)(*t, code, add_to_table_cb, L);
+  lua_newtable(L);
+  lua_newtable(L);
+  LPT(tree_compat_bisect)(*t, code, add_to_table_cb, add_vertex_cb, L);
+  lua_newtable(L);
+  lua_swap(L);
+  lua_pushstring(L,"subdivided");
+  lua_swap(L);
+  lua_settable(L, -3);
+  lua_swap(L);
+  lua_pushstring(L,"vertex_id");
+  lua_swap(L);
+  lua_settable(L, -3);
+  lua_swap(L);
+  lua_pushstring(L,"vertex_coord");  
+  lua_swap(L);
+  lua_settable(L, -3);
   return 1;
 }
 

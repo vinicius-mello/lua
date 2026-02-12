@@ -15,7 +15,7 @@ void LPT(print_simplex)(lpt code);
 LPT(tree) * LPT(tree_new)(size_t buckets);
 void LPT(tree_free)(LPT(tree) *tree);
 void LPT(tree_print_stats)(LPT(tree) *tree);
-void LPT(tree_compat_bisect)(LPT(tree) *tree, lpt code, void (*subdivided)(lpt,void*), void *udata);
+void LPT(tree_compat_bisect)(LPT(tree) *tree, lpt code, void (*subdivided)(lpt,void*), void (*new_vertex)(int,double *,void*), void *udata);
 bool LPT(tree_is_leaf)(LPT(tree) *tree, lpt code);
 void LPT(tree_visit_leafs)(LPT(tree) *tree, void (*visit)(lpt,void*), void *udata);
 void LPT(tree_search_all)(LPT(tree) *tree, double * p, void (*visit)(lpt,void*), void *udata);

@@ -6,7 +6,7 @@ local t = lpt.tree(1024)
 t:print_stats()
 
 t:subdivide_while(function(tree, code)
-  return lpt.simplex_level(code) < 5
+  return lpt.simplex_level(code) < 6
 end)
 
 t:print_stats()

@@ -1,5 +1,6 @@
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
 #include "morton.h"
 #include "queue.h"
 
@@ -343,7 +344,7 @@ void LPT(print_simplex)(lpt code)
   printf(")");
 }
 
-#if 1 
+#if 1
 #define LPT_PRESENT_BIT 0x0000000000000001ll
 #define LPT_LEAF_BIT    0x0000000000000002ll
 #define LPT_BITS_MASK (~0x0000000000000007ll)
@@ -427,9 +428,18 @@ void LPT(tree_print_stats)(LPT(tree) *tree)
   printf("  Leaf Cells: %zu\n", tree->leaf_cells);
   printf("  Cell Load factor: %.2f\n", (float)(tree->cells) / (float)(tree->cell_buckets));
   printf("  Cell Collisions: %zu\n", tree->cell_collisions);
+  float n, m;
+  n = (float)(tree->cells);
+  m = (float)(tree->cell_buckets);
+  float expected_cell_collisions = n-m*(1.0-pow(1.0-1.0/m, n));
+  printf("  Expected Cell Collisions: %.2f\n", expected_cell_collisions);
   printf("  Vertex Buckets: %zu\n", tree->vert_buckets);
   printf("  Vertices: %zu\n", tree->vertices);
   printf("  Vertices Load factor: %.2f\n", (float)(tree->vertices) / (float)(tree->vert_buckets));
+  n = (float)(tree->vertices);
+  m = (float)(tree->vert_buckets);
+  float expected_vert_collisions = n-m*(1.0-pow(1.0-1.0/m, n));
+  printf("  Expected Vertex Collisions: %.2f\n", expected_vert_collisions);
   printf("  Vertex Collisions: %zu\n", tree->vert_collisions);
 }
 

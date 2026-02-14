@@ -1,0 +1,45 @@
+This is a simple graphics library for Lua based on my pdfsg:
+	https://github.com/lhf/pdfsg
+
+To build the library and run a simple test, just do make.
+If Lua is not installed in /usr/local, tell make:
+	make LUA_TOPDIR=/var/tmp/lhf/lua-5.4.7/install
+
+To install the library where Lua can find it, use a variant of these:
+	make install
+	sudo make install
+	sudo make install LIBDIR=/usr/local/lib/lua/5.4
+
+For detailed installation instructions, see
+	http://www.tecgraf.puc-rio.br/~lhf/ftp/lua/install.html
+
+The library is simple and intuitive; see the summary below.
+Read test.lua to see the library in action.
+
+This code is hereby placed in the public domain and also under the MIT license.
+
+Please send comments, suggestions, and bug reports to lhf@tecgraf.puc-rio.br .
+
+pdfsg library:
+addgroup(p,g)			rectangle(x,y,width,height)
+addraw(code)			restore()
+circle(x,y,r)			rotate(angle)
+clip()				save()
+closepath()			scale(x,y)
+concat(a,b,c,d,x,y)		setcolor(r,g,b,a)
+conicto(x1,y1,x2,y2)		setdash(n,d)
+curveto(x1,y1,x2,y2,x3,y3)	setfill(r,g,b)
+ellipse(x,y,xr,yr)		setfont(font)
+enddoc()			setgray(f,s)
+endgroup()			setinfo(info)
+fill()				setlinecap(v)
+fillstroke()			setlinejoin(v)
+line(x1,y1,x2,y2)		setlinewidth(w)
+lineto(x1,y1)			setmiterlimit(v)
+moveto(x1,y1)			setopacity(v)
+newdoc(filename)		setstroke(r,g,b)
+newgroup()			stroke()
+newpage(width,height,label)	text(text,font,size,x,y,angle)
+polygon(n)			translate(x,y)
+polyline(n)			triangle(x1,y1,x2,y2,x3,y3)
+quad(x1,y1,x2,y2,x3,y3,x4,y4)	version

@@ -181,6 +181,51 @@ static int Ftree_print_stats(lua_State *L) {
   return 0;
 }
 
+static int Ftree_vertex_count(lua_State *L) {
+  LPT(tree) **t = (LPT(tree) **)lua_touserdata(L, 1);
+  int count = LPT(tree_vertex_count)(*t);
+  lua_pushinteger(L, count);
+  return 1;
+} 
+
+static int Ftree_leaf_count(lua_State *L) {
+  LPT(tree) **t = (LPT(tree) **)lua_touserdata(L, 1);
+  int count = LPT(tree_leaf_count)(*t);
+  lua_pushinteger(L, count);
+  return 1;
+}
+
+static int Ftree_emit_idxs(lua_State *L) {
+  LPT(tree) **t = (LPT(tree) **)lua_touserdata(L, 1);
+  array *idxs = (array *)luaL_checkudata(L, 2, "array");
+  LPT(tree_emit_idxs)(*t, (int *)idxs->ptr);
+  return 1;
+}
+
+static int Ftree_vertex_emit_coords(lua_State *L) {
+  LPT(tree) **t = (LPT(tree) **)lua_touserdata(L, 1);
+  array *coords = (array *)luaL_checkudata(L, 2, "array");
+  LPT(tree_vertex_emit_coords)(*t, (double *)coords->ptr);
+  return 1;
+}
+
+bool subdivide_cb(lpt code, void *udata) {
+  lua_State *L = (lua_State *)udata;
+  lua_pushvalue(L, -1);
+  lua_pushvalue(L, -3);
+  lua_pushinteger(L, LPT(tointeger)(code));
+  lua_call(L, 2, 1);
+  bool r = lua_toboolean(L, -1);
+  lua_pop(L, 1);
+  return r;
+}
+
+static int Ftree_subdivide_while(lua_State *L) {
+  LPT(tree) **t = (LPT(tree) **)lua_touserdata(L, 1);
+  LPT(tree_subdivide_while)(*t, &subdivide_cb, L);
+  return 0;
+}
+
 static const luaL_Reg R[] =
 {
     { "init", FInit },
@@ -201,6 +246,11 @@ static const luaL_Reg R[] =
     { "is_leaf", Ftree_is_leaf },
     { "leafs", Fleafs },
     { "print_stats", Ftree_print_stats },
+    { "vertex_count", Ftree_vertex_count },
+    { "leaf_count", Ftree_leaf_count },
+    { "emit_idxs", Ftree_emit_idxs },
+    { "vertex_emit_coords", Ftree_vertex_emit_coords },
+    { "subdivide_while", Ftree_subdivide_while },
     { "__gc", Ftree_free },
     { NULL,     NULL    }
 };

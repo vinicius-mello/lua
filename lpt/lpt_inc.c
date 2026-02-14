@@ -1,6 +1,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "morton.h"
+#include "queue.h"
 
 #define LPT_ABS(x) (((x) < 0) ? -(x) : (x))
 #define LPT_SGN(x) (((x) < 0) ? -1 : 1)
@@ -93,7 +94,7 @@ int LPT(simplex_level)(lpt code)
 
 lpt LPT(child)(lpt code, int zo)
 {
-  lpt r;
+  lpt r = {0};
   LPT(level_set)(&r, (LPT(level_get)(code) + 1) % DIM);
   if (zo == 0)
     LPT(sigperm_set)(&r, LPT(sigperm_get)(code));
@@ -158,7 +159,7 @@ bool LPT(is_child0)(lpt code)
 
 lpt LPT(parent)(lpt code)
 {
-  lpt r;
+  lpt r = {0};
   if (LPT(level_get)(code) == 0)
   {
     LPT(level_set)(&r, DIM - 1);
@@ -345,12 +346,10 @@ void LPT(print_simplex)(lpt code)
 #if 1 
 #define LPT_PRESENT_BIT 0x0000000000000001ll
 #define LPT_LEAF_BIT    0x0000000000000002ll
-#define LPT_MARK_BIT    0x0000000000000004ll
 #define LPT_BITS_MASK (~0x0000000000000007ll)
 #else
 #define LPT_PRESENT_BIT 0x8000000000000000ll
 #define LPT_LEAF_BIT    0x4000000000000000ll
-#define LPT_MARK_BIT    0x2000000000000000ll
 #define LPT_BITS_MASK (~0xE000000000000000ll)
 #endif
 #define LPT_VERTEX_PRESENT_BIT 0x0001
@@ -366,13 +365,15 @@ typedef struct vertex_s vertex;
 
 struct LPT(tree_s) {
   lpt * cell_slots;
-  vertex * vert_slots; 
+  vertex * vert_slots;
+  lpt_queue * cell_queue;
   size_t cell_buckets;
   size_t vert_buckets;
+  size_t cell_collisions;
+  size_t vert_collisions;
   size_t cells;
   size_t leaf_cells;
   size_t vertices;
-  
 };
 
 typedef struct LPT(tree_s) LPT(tree);
@@ -385,7 +386,7 @@ uint64_t LPT(hash)(ulong code) {
   return x;
 }
 
-bool LPT(tree_insert)(LPT(tree) *tree, lpt code, bool leaf, bool mark);
+bool LPT(tree_insert)(LPT(tree) *tree, lpt code, bool leaf);
 bool LPT(tree_vertex_insert)(LPT(tree) *tree, ulong mcode);
 
 LPT(tree) * LPT(tree_new)(size_t buckets)
@@ -399,11 +400,14 @@ LPT(tree) * LPT(tree_new)(size_t buckets)
   tree->vert_slots = (vertex *)calloc(buckets, sizeof(vertex));
   tree->vertices = 0;
   tree->vert_buckets = buckets;
-  lpt t;
+  tree->cell_collisions = 0;
+  tree->vert_collisions = 0;
+  tree->cell_queue = lpt_queue_new(256);
+  lpt t = {0};
   static const int fact[5] = {1, 1, 2, 6, 24};
   for(int i=0;i<fact[DIM];++i) {
     LPT(init)(&t, i);
-    LPT(tree_insert)(tree, t, true, false);
+    LPT(tree_insert)(tree, t, true);
   }
   for(int i=0;i<(1<<DIM);++i) {
     double p[DIM];
@@ -422,21 +426,24 @@ void LPT(tree_print_stats)(LPT(tree) *tree)
   printf("  Cells: %zu\n", tree->cells);
   printf("  Leaf Cells: %zu\n", tree->leaf_cells);
   printf("  Cell Load factor: %.2f\n", (float)(tree->cells) / (float)(tree->cell_buckets));
+  printf("  Cell Collisions: %zu\n", tree->cell_collisions);
   printf("  Vertex Buckets: %zu\n", tree->vert_buckets);
   printf("  Vertices: %zu\n", tree->vertices);
   printf("  Vertices Load factor: %.2f\n", (float)(tree->vertices) / (float)(tree->vert_buckets));
+  printf("  Vertex Collisions: %zu\n", tree->vert_collisions);
 }
 
 void LPT(tree_free)(LPT(tree) *tree)
 {
   free(tree->cell_slots);
   free(tree->vert_slots);
+  lpt_queue_free(tree->cell_queue);
   free(tree);
 }
 
 void LPT(tree_rehash)(LPT(tree) *tree, size_t new_buckets);
 
-bool LPT(tree_insert)(LPT(tree) *tree, lpt code, bool leaf, bool mark)
+bool LPT(tree_insert)(LPT(tree) *tree, lpt code, bool leaf)
 {
   float load_factor = (float)(tree->cells) / (float)(tree->cell_buckets);
   if (load_factor > 0.7f)
@@ -448,11 +455,11 @@ bool LPT(tree_insert)(LPT(tree) *tree, lpt code, bool leaf, bool mark)
          == (code.code & LPT_BITS_MASK)) {
       return false; // already present
     }
+    tree->cell_collisions++;
     hash = (hash + 1) % tree->cell_buckets;
   }
   tree->cell_slots[hash].code = code.code 
     | (leaf ? LPT_LEAF_BIT : 0) 
-    | (mark ? LPT_MARK_BIT : 0) 
     | LPT_PRESENT_BIT;
   tree->cells++;
   if(leaf) tree->leaf_cells++;
@@ -470,6 +477,7 @@ bool LPT(tree_vertex_insert)(LPT(tree) *tree, ulong mcode) {
     if(tree->vert_slots[hash].mcode == mcode) {
       return false; // already present
     }
+    tree->vert_collisions++;
     hash = (hash + 1) % tree->vert_buckets;
   }
   tree->vert_slots[hash].mcode = mcode;
@@ -479,7 +487,7 @@ bool LPT(tree_vertex_insert)(LPT(tree) *tree, ulong mcode) {
   return true;
 }
 
-int LPT(tree_vertex_find)(LPT(tree) *tree, ulong mcode) {
+int LPT(tree_vertex_find_id)(LPT(tree) *tree, ulong mcode) {
   size_t hash = LPT(hash)(mcode) % tree->vert_buckets;
   while((tree->vert_slots[hash].flags & LPT_VERTEX_PRESENT_BIT) != 0) {
     if(tree->vert_slots[hash].mcode == mcode) {
@@ -512,14 +520,14 @@ void LPT(tree_rehash)(LPT(tree) *tree, size_t new_buckets)
   tree->cell_buckets = new_buckets;
   tree->cells = 0;
   tree->leaf_cells = 0;
+  tree->cell_collisions = 0;
   for (size_t i = 0; i < old_buckets; ++i)
   {
     if ((old_slots[i].code & LPT_PRESENT_BIT) != 0)
     {
       bool leaf = (old_slots[i].code & LPT_LEAF_BIT) != 0;
-      bool mark = (old_slots[i].code & LPT_MARK_BIT) != 0;
       lpt code = {old_slots[i].code & LPT_BITS_MASK};
-      LPT(tree_insert)(tree, code, leaf, mark);
+      LPT(tree_insert)(tree, code, leaf);
     }
   }
   free(old_slots);
@@ -531,6 +539,7 @@ void LPT(tree_vertex_rehash)(LPT(tree) *tree, size_t new_buckets) {
   tree->vert_slots = (vertex *)calloc(new_buckets, sizeof(vertex));
   tree->vert_buckets = new_buckets;
   tree->vertices = 0;
+  tree->vert_collisions = 0;
   for (size_t i = 0; i < old_buckets; ++i)
   {
     if ((old_slots[i].flags & LPT_VERTEX_PRESENT_BIT) != 0)
@@ -542,42 +551,27 @@ void LPT(tree_vertex_rehash)(LPT(tree) *tree, size_t new_buckets) {
   free(old_slots);
 }
 
-void LPT(tree_mark)(LPT(tree) *tree, lpt code)
-{
-  int index = LPT(tree_find)(tree, code);
-  if (index >= 0) {
-    tree->cell_slots[index].code |= LPT_MARK_BIT;
-  } else {
-    fprintf(stderr, "tree_mark: code not found\n");
-  }
+int LPT(tree_vertex_count)(LPT(tree) *tree) {
+  return tree->vertices;
 }
 
-void LPT(tree_unmark)(LPT(tree) *tree, lpt code)
+int LPT(tree_leaf_count)(LPT(tree) *tree) {
+  return tree->leaf_cells;
+}
+
+void LPT(tree_mark)(LPT(tree) *tree, lpt code)
 {
-  int index = LPT(tree_find)(tree, code);
-  if (index >= 0) {
-    tree->cell_slots[index].code &= ~LPT_MARK_BIT;
-  } else {
-    fprintf(stderr, "tree_unmark: code not found\n");
-  } 
+  lpt_queue_pushright(tree->cell_queue, code.code);
 }
 
 void LPT(tree_unmark_all)(LPT(tree) *tree) 
 {
-  for(size_t i=0;i<tree->cell_buckets;++i) {
-    if((tree->cell_slots[i].code & LPT_PRESENT_BIT) != 0)
-      tree->cell_slots[i].code &= ~LPT_MARK_BIT;
-  }
+  lpt_queue_reset(tree->cell_queue);
 }
 
 bool LPT(tree_is_marked)(LPT(tree) *tree, lpt code)
 {
-  int index = LPT(tree_find)(tree, code);
-  if (index >= 0) {
-    return (tree->cell_slots[index].code & LPT_MARK_BIT) != 0;
-  }
-  fprintf(stderr, "tree_is_marked: code not found\n");
-  return false;
+  return lpt_queue_contains(tree->cell_queue, code.code);
 }
 
 void LPT(tree_leaf)(LPT(tree) *tree, lpt code)
@@ -620,12 +614,11 @@ bool LPT(tree_exists)(LPT(tree) *tree, lpt code)
 
 void LPT(tree_simple_bisect)(LPT(tree) *tree, lpt code)
 {
-  //assert(LPT(tree_exists)(tree, code) && LPT(tree_is_leaf)(tree, code))
   LPT(tree_unleaf)(tree, code);
   lpt c0 = LPT(child)(code, 0);
   lpt c1 = LPT(child)(code, 1);
-  LPT(tree_insert)(tree, c0, true, false);
-  LPT(tree_insert)(tree, c1, true, false);
+  LPT(tree_insert)(tree, c0, true);
+  LPT(tree_insert)(tree, c1, true);
 }
 
 void LPT(tree_compat_bisect_rec)(LPT(tree) *tree, lpt code,
@@ -635,7 +628,7 @@ void LPT(tree_compat_bisect_rec)(LPT(tree) *tree, lpt code,
   LPT(tree_mark)(tree, code);
   for(int i=0;i<=DIM;++i) {
     if(i==DIM || i==LPT(level)(code)) continue;
-    lpt n;
+    lpt n = {0};
     if(LPT(neighbor)(code, i, &n)) {
       if(!LPT(tree_exists)(tree, n)) {
         lpt p = LPT(parent)(n);
@@ -651,7 +644,7 @@ void LPT(tree_compat_bisect_rec)(LPT(tree) *tree, lpt code,
   LPT(simplex)(LPT(child)(code, 0), &s[0][0]);
   ulong mcode = morton_encode(DIM, &s[l][0]);
   if(LPT(tree_vertex_insert)(tree, mcode)) {
-    int vid = LPT(tree_vertex_find)(tree, mcode);
+    int vid = LPT(tree_vertex_find_id)(tree, mcode);
     if(new_vertex) new_vertex(vid, &s[l][0], udata);
   }
   LPT(tree_simple_bisect)(tree, code);
@@ -689,7 +682,7 @@ bool LPT(tree_neighbor)(LPT(tree) *tree, lpt r, int i, lpt *n) {
 
 int LPT(tree_neighbor_index)(LPT(tree) *tree, lpt r, lpt n) {
   for(int j=0;j<=DIM;++j) {
-    lpt rr;
+    lpt rr = {0};
     if(LPT(tree_neighbor)(tree, n, j, &rr)) {
       if((rr.code & LPT_BITS_MASK) == (r.code & LPT_BITS_MASK))
         return j;
@@ -718,7 +711,7 @@ lpt LPT(find_root)(double * p, double * w) {
     for(int j=i+1;j<DIM;++j) if(a[j]<a[i]) ++k;
     code+=fact[DIM-i-1]*k;
   }
-  lpt r;
+  lpt r = {0};
   LPT(init)(&r, code);
   w[0]=(1.0-p[a[1-1]])/2.0;
   for(i=1;i<DIM;++i) w[i]=(p[a[i-1]]-p[a[(i+1)-1]])/2.0;
@@ -765,7 +758,7 @@ void LPT(tree_search_all_rec)(LPT(tree) *tree, lpt r, unsigned int faces, void (
   LPT(tree_mark)(tree, r);
   for(unsigned int i=0;i<=DIM;++i) {
     if((faces & (1<<i))!=0) continue;
-    lpt n;
+    lpt n = {0};
     if(LPT(tree_neighbor)(tree, r, i, &n)) {
       if(!LPT(tree_is_marked)(tree, n)) {
         int k = LPT(tree_neighbor_index)(tree, r, n);
@@ -797,3 +790,52 @@ void LPT(tree_visit_leafs)(LPT(tree) *tree, void (*visit)(lpt,void*), void *udat
   }
 }
 
+void LPT(tree_vertex_emit_coords)(LPT(tree) *tree, double * coords) {
+  for(size_t i=0;i<tree->vert_buckets;++i) {
+    vertex v = tree->vert_slots[i];
+    if((v.flags & LPT_VERTEX_PRESENT_BIT) != 0) {
+      morton_decode(v.mcode, DIM, &coords[DIM*v.id]);
+    }
+  }
+}
+
+void LPT(tree_emit_idxs)(LPT(tree) *tree, int * idxs) {
+  size_t k = 0;
+  for(size_t i=0;i<tree->cell_buckets;++i) {
+    lpt slot = tree->cell_slots[i];
+    if(slot.code & (LPT_LEAF_BIT)) { 
+      lpt code = {slot.code & LPT_BITS_MASK}; 
+      double s[DIM + 1][DIM]; 
+      LPT(simplex)(code, &s[0][0]); 
+      for(int j=0;j<=DIM;++j) {
+        ulong mcode = morton_encode(DIM, &s[j][0]);
+        int vid = LPT(tree_vertex_find_id)(tree, mcode);
+        idxs[(DIM+1)*(k)+ j] = vid;
+      }
+      k++;
+    }
+  }
+}
+
+void LPT(subdivide_cb)(lpt code, void *udata) {
+  lpt_queue *q = (lpt_queue *)udata;
+  lpt_queue_pushright(q, LPT(tointeger)(LPT(child)(code, 0)));
+  lpt_queue_pushright(q, LPT(tointeger)(LPT(child)(code, 1)));
+}
+
+void LPT(tree_subdivide_while)(LPT(tree) *tree, bool (*test)(lpt, void*), void *udata) {
+  lpt_queue * q = lpt_queue_new(256);
+  for(size_t i=0;i<tree->cell_buckets;++i) {
+    lpt slot = tree->cell_slots[i];
+    if(slot.code & (LPT_LEAF_BIT)) {
+      lpt code = {slot.code & LPT_BITS_MASK};
+      lpt_queue_pushright(q, code.code);
+    }
+  }
+  while(!lpt_queue_empty(q)) {
+    lpt code = {lpt_queue_popleft(q)};
+    if(LPT(tree_is_leaf(tree, code))&&test(code, udata)) {
+      LPT(tree_compat_bisect)(tree, code, LPT(subdivide_cb), NULL, q);
+    }
+  }
+}

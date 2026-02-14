@@ -1,28 +1,31 @@
 #include <stdio.h>
-#include "lpt2.h"
 #include "lpt3.h"
+#include "lpt3.h"
+#include "queue.h"
 
-void visit_cb(lpt2 code, void *udata) {
-    lpt2_print_simplex(code);
-    printf("\n");
-}
-
-void subdivided_cb(lpt2 code, void *udata) {
-    printf("Subdivided: ");
-    lpt2_print_simplex(code);
-    printf("\n");
+bool test_cb(lpt3 code, void *udata) {
+    return lpt3_simplex_level(code) < 5;
 }
 
 int main()
 {
-    printf("LPT2 and LPT3 test program\n");
+    printf("lpt3 and LPT3 test program\n");
 
-    printf("sizeof(lpt2) = %zu bytes\n", sizeof(lpt2));
     printf("sizeof(lpt3) = %zu bytes\n", sizeof(lpt3));
-    lpt2_tree * tree2 = lpt2_tree_new(0);
-    lpt2_tree_search_all(tree2, (double[]){0.0, 0.0}, visit_cb, NULL);
-    lpt2_tree_visit_leafs(tree2, visit_cb, NULL);
-    lpt2_tree_free(tree2);
-    
+    printf("sizeof(lpt3) = %zu bytes\n", sizeof(lpt3));
+    lpt3_tree * tree = lpt3_tree_new(1024);
+    lpt3_tree_subdivide_while(tree, test_cb, NULL);
+    lpt3_tree_print_stats(tree);
+
+    double * coords = malloc(sizeof(double) * LPT3_DIM * lpt3_tree_vertex_count(tree));
+    int * idxs = malloc(sizeof(int) * (LPT3_DIM+1) * lpt3_tree_leaf_count(tree));
+
+    lpt3_tree_vertex_emit_coords(tree, coords);
+    lpt3_tree_emit_idxs(tree, idxs);
+
+    lpt3_tree_print_stats(tree);
+
+    lpt3_tree_free(tree);
+
     return 0;
 } 

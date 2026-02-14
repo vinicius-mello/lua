@@ -92,6 +92,7 @@ const int lpt2_table_orth[8] = {0, 1, 2, 3, 0, 2, 1, 3};
 
 void lpt2_init(lpt2 *code, uchar sigperm)
 {
+  code->u.reserved = 0;
   code->u.level = 0;
   code->u.sigperm = sigperm<<LPT2_DIM;
   code->u.orth_level = 0;

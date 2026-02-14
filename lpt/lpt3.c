@@ -385,6 +385,7 @@ const int lpt3_table_orth[48]={ 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 4,
 
 void lpt3_init(lpt3 *code, uchar sigperm)
 {
+  code->u.reserved = 0;
   code->u.level = 0;
   code->u.sigperm = sigperm<<LPT3_DIM;
   code->u.orth_level = 0;

@@ -29,6 +29,8 @@ typedef struct lbfgsb_data_ {
   char task[60];
 } lbfgsb_data;
 
+typedef unsigned int uint;
+
 void array_double(lua_State *L, uint n) {
   luaL_getmetatable(L,"array");
   lua_pushstring(L, "double");
@@ -52,8 +54,6 @@ void array_int(lua_State *L, uint n) {
   lua_call(L,1,1);
   lua_remove(L,-2);
 }
-
-typedef unsigned int uint;
 
 static int Fnew(lua_State *L) {
   if(lua_istable(L,1)) {

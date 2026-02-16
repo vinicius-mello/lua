@@ -1,3 +1,4 @@
+package.cpath = "../libs/?.so;" .. package.cpath
 local pdf=require"pdfsg"
 local array = require "array"
 local lpt = require "lpt2"

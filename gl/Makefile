@@ -12,7 +12,7 @@ glfw.so: glfw.c
 	$(CC) $(MYCFLAGS) -o $@ $(SHARED) $< $(GLFW_LIB) -lglfw
 
 install: gl.so glfw.so
-	cp gl.so glfw.so $(LIBDIR)
+	cp gl.so glfw.so $(INSTALLDIR)
 
 clean:
 	rm -rf gl.so glfw.so

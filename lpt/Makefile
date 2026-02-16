@@ -26,7 +26,7 @@ test: test.c lpt3.o lpt2.o morton.o
 	$(CC) $(MYCFLAGS) -o $@ test.c lpt2.o lpt3.o morton.o queue.o -lm
 
 install: lpt2.so lpt3.so
-	cp lpt2.so lpt3.so $(LIBDIR)
+	cp lpt2.so lpt3.so $(INSTALLDIR)
 
 clean:
 	rm -rf lpt2.so lpt3.so lpt2.o lpt3.o morton.o test

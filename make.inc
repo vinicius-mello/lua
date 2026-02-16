@@ -1,10 +1,18 @@
-LUA_TOPDIR= /usr/local
-LUA_INCDIR= $(LUA_TOPDIR)/include
+# LUA_TOPDIR= /usr/local
+# LUA_INCDIR= $(LUA_TOPDIR)/include
+# LUA_BINDIR= $(LUA_TOPDIR)/bin
+#    LIBDIR= $(LUA_TOPDIR)/lib/lua/5.4
+#       LUA= $(LUA_BINDIR)/lua
+
+LUA_TOPDIR= /usr
+LUA_INCDIR= $(LUA_TOPDIR)/include/luajit-2.1
 LUA_BINDIR= $(LUA_TOPDIR)/bin
-    LIBDIR= $(LUA_TOPDIR)/lib/lua/5.4
-       LUA= $(LUA_BINDIR)/lua
+    LIBDIR= $(LUA_TOPDIR)/lib/
+       LUA= $(LUA_BINDIR)/luajit
 
 CC= gcc -std=c99
 CXX= g++
 CFLAGS= -Wall -Wextra -Wfatal-errors -O2
 SHARED= -shared -fPIC
+
+INSTALLDIR= ../libs

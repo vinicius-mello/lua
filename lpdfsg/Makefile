@@ -6,7 +6,7 @@ pdfsg.so: lpdfsg.c src/pdfsg.c
 	$(CC) $(MYCFLAGS) -o $@ $(SHARED) $^
 
 install: pdfsg.so
-	cp pdfsg.so $(LIBDIR)
+	cp pdfsg.so $(INSTALLDIR)
 
 clean:
 	rm -f *.o *.so test.pdf

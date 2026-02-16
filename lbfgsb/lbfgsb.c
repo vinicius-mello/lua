@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #define LIBNAME  "lbfgsb"
 #define LIBTYPE "lbfgsb"
 #define LIBVERSION "1"

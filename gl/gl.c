@@ -203,7 +203,8 @@ static int FGetShaderInfoLog(lua_State *L) {
     return 1;
   }
 	luaL_Buffer b;
-	luaL_buffinitsize(L,&b,len+1);	  
+	//luaL_buffinitsize(L,&b,len+1);	  
+	luaL_buffinit(L,&b);	  
   char * ch = malloc(len + 1);
   glGetShaderInfoLog(shader, len, &lenr, ch);
   luaL_addstring(&b,ch);
@@ -260,11 +261,11 @@ static int FGetUniformLocation(lua_State *L) {
 
 static int FUniform(lua_State *L) {
   int location = luaL_checkinteger(L, 1);
-  if(lua_isinteger(L, 2)) {
+  /*if(lua_isinteger(L, 2)) {
     int value = luaL_checkinteger(L, 2);
     glUniform1i(location, value);
     return 0;
-  }
+  }*/
   if(lua_isnumber(L, 2)) {
     float value = luaL_checknumber(L, 2);
     glUniform1f(location, value);

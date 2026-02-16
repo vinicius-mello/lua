@@ -7,7 +7,7 @@ interval.so: linterval.cpp
 	$(CXX) $(MYCFLAGS) -o $@ $(SHARED) $< $(INTERVAL_LIB) 
 
 install: interval.so
-	cp interval.so adia.lua ad.lua $(LIBDIR)
+	cp interval.so adia.lua ad.lua $(INSTALLDIR)
 
 clean:
 	rm -rf interval.so

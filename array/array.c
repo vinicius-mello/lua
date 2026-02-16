@@ -9,6 +9,10 @@
 #include "mycompat.h"
 #include "array.h"
 
+#if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM == 501
+    #define lua_rawlen(L, i) lua_objlen(L, (i))
+    // Other Lua 5.1 specific compatibility definitions...
+#endif
 
 #define MYNAME		"array"
 #define MYTYPE		MYNAME
@@ -134,12 +138,12 @@ static int Pnewt(lua_State *L, entry_type entry_type)
 	size_t cols;
 	lua_pushstring(L,"rows");
 	lua_gettable(L,1);
-	if(lua_isinteger(L,-1)) {
+	if(!lua_isnil(L,-1)) {
 		rows = lua_tointeger(L,-1);
 		lua_pop(L,1);
 		lua_pushstring(L,"cols");
 		lua_gettable(L,1);
-		if(lua_isinteger(L,-1))
+		if(!lua_isnil(L,-1))
 			cols = lua_tointeger(L,-1);
 		else cols = 1;
 		lua_pop(L,1);
@@ -147,7 +151,7 @@ static int Pnewt(lua_State *L, entry_type entry_type)
 		lua_pop(L,1);
 		lua_pushstring(L,"cols");
 		lua_gettable(L,1);
-		if(lua_isinteger(L,-1)) {
+		if(!lua_isnil(L,-1)) {
 			cols = lua_tointeger(L,-1);
 			rows = 1;
 		} else {
@@ -499,7 +503,8 @@ static int Ftostring(lua_State *L) {
   size_t buffer_line = 2+2+(padding+1)*max_entries_per_line+(hor_dots?2:0)+1;
   {
 		luaL_Buffer b;
-		luaL_buffinitsize(L,&b,buffer_line);
+		//luaL_buffinitsize(L,&b,buffer_line);
+		luaL_buffinit(L,&b);
 		luaL_addstring(&b,"┌");
 		for(size_t j=0;j<buffer_line-5-(hor_dots?1:0);j++)
 			luaL_addchar(&b,' ');
@@ -527,7 +532,8 @@ static int Ftostring(lua_State *L) {
 			}
 		}
 		luaL_Buffer b;
-		luaL_buffinitsize(L,&b,buffer_line);
+		//luaL_buffinitsize(L,&b,buffer_line);
+		luaL_buffinit(L,&b);
 		luaL_addstring(&b,"│");
 		for(size_t j=1;j<=max_entries_per_line;++j) {
 			if(j==max_entries_per_line) {
@@ -561,7 +567,8 @@ static int Ftostring(lua_State *L) {
 	}
 	{
 		luaL_Buffer b;
-		luaL_buffinitsize(L,&b,buffer_line);
+		//luaL_buffinitsize(L,&b,buffer_line);
+		luaL_buffinit(L,&b);
 		luaL_addstring(&b,"└");
 		for(size_t j=0;j<buffer_line-5-(hor_dots?1:0);j++)
 			luaL_addchar(&b,' ');
@@ -651,7 +658,7 @@ static int FLU_solve(lua_State *L) {
 }
 
 static int Findex(lua_State *L) {
-	if(lua_isinteger(L,2)) {
+	if(lua_isnumber(L,2)) {
 		return Fget(L);
 	}
 	lua_getmetatable(L,1);
@@ -661,7 +668,7 @@ static int Findex(lua_State *L) {
 }
 
 static int Fnewindex(lua_State *L) {
-	if(lua_isinteger(L,2)) {
+	if(lua_isnumber(L,2)) {
 		return Fset(L);
 	}
 	lua_getmetatable(L,1);

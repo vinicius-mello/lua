@@ -1,3 +1,8 @@
+#if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM == 501
+    #define lua_rawlen(L, i) lua_objlen(L, (i))
+    // Other Lua 5.1 specific compatibility definitions...
+#endif
+
 typedef struct luaL_IntegerConstant {
   const char *name;
   lua_Integer i;

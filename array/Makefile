@@ -6,7 +6,7 @@ array.so: array.c
 	$(CC) $(MYCFLAGS) -o $@ $(SHARED) $< -lopenblas -llapacke -llapack -lm
 
 install: array.so
-	cp array.so $(LIBDIR)
+	cp array.so $(INSTALLDIR)
 
 clean:
 	rm -rf array.so

@@ -22,7 +22,7 @@ timer.o: timer.f
 	$(FC) $(FFLAGS) timer.f -o timer.o
 
 install: lbfgsb.so
-	cp lbfgsb.so $(LIBDIR)
+	cp lbfgsb.so $(INSTALLDIR)
 
 clean:
 	rm -rf lbfgsb.so lbfgsb.o linpack.o blas.o timer.o

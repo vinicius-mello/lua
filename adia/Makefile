@@ -1,13 +1,13 @@
 include ../make.inc
 
-MYCFLAGS= $(CFLAGS) -I$(LUA_INCDIR)
-INTERVAL_LIB = 
+MYCFLAGS= $(CFLAGS) -I$(LUA_INCDIR) 
+INTERVAL_LIB = -I fi_lib -l:fi_lib.a -L fi_lib
 
-interval.so: linterval.cpp
-	$(CXX) $(MYCFLAGS) -o $@ $(SHARED) $< $(INTERVAL_LIB) 
+adia.so: adia.c
+	$(CC) $(MYCFLAGS) -o $@ $(SHARED) $< $(INTERVAL_LIB) 
 
-install: interval.so
-	cp interval.so adia.lua ad.lua $(INSTALLDIR)
+install: adia.so
+	cp adia.so $(INSTALLDIR)
 
 clean:
-	rm -rf interval.so
+	rm -rf adia.so

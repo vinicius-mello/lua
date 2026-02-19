@@ -23,4 +23,4 @@ void LPT(tree_visit_leafs)(LPT(tree) *tree, void (*visit)(lpt,void*), void *udat
 void LPT(tree_vertex_emit_coords)(LPT(tree) *tree, double * coords);
 void LPT(tree_emit_idxs)(LPT(tree) *tree, int * idxs);
 void LPT(tree_search_all)(LPT(tree) *tree, double * p, void (*visit)(lpt,void*), void *udata);
-void LPT(tree_subdivide_while)(LPT(tree) *tree, bool (*test)(lpt, void*), void *udata);
+void LPT(tree_subdivide_until)(LPT(tree) *tree, bool (*test)(lpt, void*), void *udata);

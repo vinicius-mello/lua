@@ -833,7 +833,7 @@ void LPT(subdivide_cb)(lpt code, void *udata) {
   lpt_queue_pushright(q, LPT(tointeger)(LPT(child)(code, 1)));
 }
 
-void LPT(tree_subdivide_while)(LPT(tree) *tree, bool (*test)(lpt, void*), void *udata) {
+void LPT(tree_subdivide_until)(LPT(tree) *tree, bool (*test)(lpt, void*), void *udata) {
   lpt_queue * q = lpt_queue_new(256);
   for(size_t i=0;i<tree->cell_buckets;++i) {
     lpt slot = tree->cell_slots[i];
@@ -844,7 +844,7 @@ void LPT(tree_subdivide_while)(LPT(tree) *tree, bool (*test)(lpt, void*), void *
   }
   while(!lpt_queue_empty(q)) {
     lpt code = {lpt_queue_popleft(q)};
-    if(LPT(tree_is_leaf(tree, code))&&test(code, udata)) {
+    if(LPT(tree_is_leaf(tree, code))&&(!test(code, udata))) {
       LPT(tree_compat_bisect)(tree, code, LPT(subdivide_cb), NULL, q);
     }
   }

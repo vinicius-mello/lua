@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#define CODE "lpt2_code"
 #define LIBNAME  "lpt2"
 #define LIBTYPE "lpt2"
 #define LIBVERSION "1"
@@ -18,8 +19,19 @@ typedef lpt2 lpt;
 
 LUALIB_API int luaopen_lpt2(lua_State *L)
 {
+    luaL_newmetatable(L,CODE);
+ 		luaL_setfuncs(L,Code,0);
+    lua_pushliteral(L,"__index");
+    lua_pushvalue(L,-2);
+    lua_settable(L,-3);
+
     luaL_newmetatable(L,LIBTYPE);
  		luaL_setfuncs(L,R,0);
+    
+    lua_pushliteral(L,"code");
+    lua_pushvalue(L, -3);
+    lua_settable(L, -3);
+
     lua_pushliteral(L,"version");
     lua_pushliteral(L,LIBVERSION);
     lua_settable(L,-3);

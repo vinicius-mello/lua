@@ -1,12 +1,12 @@
-package.cpath = "./?.so;" .. package.cpath
+package.cpath = "./?.so;../libs/?.so;" .. package.cpath
 array = require "array"
 lpt = require "lpt3"
 
 local t = lpt.tree(1024)
 t:print_stats()
 
-t:subdivide_while(function(tree, code)
-  return lpt.simplex_level(code) < 6
+t:subdivide_until(function(tree, code)
+  return code:simplex_level() == 6
 end)
 
 t:print_stats()

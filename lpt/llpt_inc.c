@@ -13,92 +13,75 @@ static const luaL_IntegerConstant C[] = {
  {   "MAX_ORTHANT_LEVEL", MAX_ORTHANT_LEVEL},
  {   NULL, 0} };
 
+static lpt * Fnew_code(lua_State *L) {
+  lpt *r=lua_newuserdata(L,sizeof(lpt));
+  luaL_setmetatable(L, CODE);
+  return r;
+}
 
-static int FInit(lua_State *L) {
-  lpt r;
-  LPT(init)(&r, luaL_checkinteger(L, 1));
-  lua_pushinteger(L, LPT(tointeger)(r));
+static int Fnew(lua_State *L) {
+  lpt *r=Fnew_code(L);
+  LPT(init)(r, luaL_checkinteger(L, 1));
   return 1; 
 } 
 
 static int FLevel(lua_State *L) {
-  lpt r = LPT(frominteger)(luaL_checkinteger(L, 1));
-  lua_pushinteger(L, LPT(level)(r));
+  lpt *r = luaL_checkudata(L, 1, CODE);
+  lua_pushinteger(L, LPT(level)(*r));
   return 1; 
 } 
 
 static int FSimplexLevel(lua_State *L) {
-  lpt r = LPT(frominteger)(luaL_checkinteger(L, 1));
-  lua_pushinteger(L, LPT(simplex_level)(r));
+  lpt *r = luaL_checkudata(L, 1, CODE);
+  lua_pushinteger(L, LPT(simplex_level)(*r));
   return 1; 
 } 
 
 static int FOrthantLevel(lua_State *L) {
-  lpt r = LPT(frominteger)(luaL_checkinteger(L, 1));
-  lua_pushinteger(L, LPT(orthant_level)(r));
+  lpt *r = luaL_checkudata(L, 1, CODE);
+  lua_pushinteger(L, LPT(orthant_level)(*r));
   return 1; 
 } 
 
 static int FChild(lua_State *L) {
-  lpt r = LPT(frominteger)(luaL_checkinteger(L, 1));
+  lpt *r = luaL_checkudata(L, 1, CODE);
   int zo = luaL_checkinteger(L, 2);
-  r = LPT(child)(r, zo);
-  lua_pushinteger(L, LPT(tointeger)(r));
+  lpt *s=Fnew_code(L);
+  *s = LPT(child)(*r, zo);
   return 1; 
 } 
 
 static int FisChild0(lua_State *L) {
-  lpt r = LPT(frominteger)(luaL_checkinteger(L, 1));
-  bool b = LPT(is_child0)(r);
+  lpt *r = luaL_checkudata(L, 1, CODE);
+  bool b = LPT(is_child0)(*r);
   lua_pushboolean(L, b);
   return 1; 
 }
 
 static int FParent(lua_State *L) {
-  lpt r = LPT(frominteger)(luaL_checkinteger(L, 1));
-  r = LPT(parent)(r);
-  lua_pushinteger(L, LPT(tointeger)(r));
+  lpt *r = luaL_checkudata(L, 1, CODE);
+  lpt *s=Fnew_code(L);
+  *s = LPT(parent)(*r);
   return 1;
 }
 
 static int FOrientation(lua_State *L) {
-  lpt r = LPT(frominteger)(luaL_checkinteger(L, 1));
-  int o = LPT(orientation)(r);
+  lpt *r = luaL_checkudata(L, 1, CODE);
+  int o = LPT(orientation)(*r);
   lua_pushinteger(L, o);
   return 1; 
 }
 
-static int FNeighborBd(lua_State *L) {
-  lpt code = LPT(frominteger)(luaL_checkinteger(L, 1));
-  int i = luaL_checkinteger(L, 2);
-  lpt r;
-  int res = LPT(neighbor_bd)(code, i, &r);
-  lua_pushinteger(L, res);
-  lua_pushinteger(L, LPT(tointeger)(r));
-  return 2; 
-}
-
-static int FNeighbor(lua_State *L) {
-  lpt code = LPT(frominteger)(luaL_checkinteger(L, 1));
-  int i = luaL_checkinteger(L, 2);
-  lpt r;
-  bool res = LPT(neighbor)(code, i, &r);
-  lua_pushboolean(L, res);
-  lua_pushinteger(L, LPT(tointeger)(r));
-  return 2; 
-}
-
-
-static int FSimplex(lua_State *L) {
-  lpt code = LPT(frominteger)(luaL_checkinteger(L, 1));
+static int FCoords(lua_State *L) {
+  lpt *r = luaL_checkudata(L, 1, CODE);
   array *s = (array *)luaL_checkudata(L, 2, "array");
-  LPT(simplex)(code, (double *)s->ptr);
+  LPT(simplex)(*r, (double *)s->ptr);
   return 1;
 }
 
 static int FPrintSimplex(lua_State *L) {
-  lpt code = LPT(frominteger)(luaL_checkinteger(L, 1));
-  LPT(print_simplex)(code);
+  lpt *r = luaL_checkudata(L, 1, CODE);
+  LPT(print_simplex)(*r);
   return 0;
 }
 
@@ -118,7 +101,8 @@ static int Ftree_free(lua_State *L) {
 
 static void add_to_table_cb(lpt code, void *udata) {
   lua_State *L = (lua_State *)udata;
-  lua_pushinteger(L, LPT(tointeger)(code));
+  lpt *c = Fnew_code(L);
+  *c = code;
   lua_rawseti(L, -2, lua_rawlen(L, -2) + 1);
 }
 
@@ -144,11 +128,11 @@ static int Ftree_search_all(lua_State *L) {
 
 static int Ftree_compat_bisect(lua_State *L) {
   LPT(tree) **t = (LPT(tree) **)lua_touserdata(L, 1);
-  lpt code = LPT(frominteger)(luaL_checkinteger(L, 2));
+  lpt *code = luaL_checkudata(L, 2, CODE);
   lua_newtable(L);
   lua_newtable(L);
   lua_newtable(L);
-  LPT(tree_compat_bisect)(*t, code, add_to_table_cb, add_vertex_cb, L);
+  LPT(tree_compat_bisect)(*t, *code, add_to_table_cb, add_vertex_cb, L);
   lua_newtable(L);
   lua_swap(L);
   lua_pushstring(L,"subdivided");
@@ -174,8 +158,8 @@ static int Fleafs(lua_State *L) {
 
 static int Ftree_is_leaf(lua_State *L) {
   LPT(tree) **t = (LPT(tree) **)lua_touserdata(L, 1);
-  lpt code = LPT(frominteger)(luaL_checkinteger(L, 2));
-  bool is_leaf = LPT(tree_is_leaf)(*t, code);
+  lpt * code = luaL_checkudata(L, 2, CODE);
+  bool is_leaf = LPT(tree_is_leaf)(*t, *code);
   lua_pushboolean(L, is_leaf);
   return 1;
 }
@@ -218,22 +202,24 @@ bool subdivide_cb(lpt code, void *udata) {
   lua_State *L = (lua_State *)udata;
   lua_pushvalue(L, -1);
   lua_pushvalue(L, -3);
-  lua_pushinteger(L, LPT(tointeger)(code));
+  lpt *c = Fnew_code(L);
+  *c = code;
   lua_call(L, 2, 1);
   bool r = lua_toboolean(L, -1);
   lua_pop(L, 1);
   return r;
 }
 
-static int Ftree_subdivide_while(lua_State *L) {
+static int Ftree_subdivide_until(lua_State *L) {
   LPT(tree) **t = (LPT(tree) **)lua_touserdata(L, 1);
-  LPT(tree_subdivide_while)(*t, &subdivide_cb, L);
+  LPT(tree_subdivide_until)(*t, &subdivide_cb, L);
   return 0;
 }
 
-static const luaL_Reg R[] =
+
+static const luaL_Reg Code[] =
 {
-    { "init", FInit },
+    { "new", Fnew },
     { "level", FLevel },
     { "simplex_level", FSimplexLevel },
     { "orthant_level", FOrthantLevel },
@@ -241,10 +227,13 @@ static const luaL_Reg R[] =
     { "parent", FParent },
     { "is_child0", FisChild0 },
     { "orientation", FOrientation },
-    { "neighbor_bd", FNeighborBd },
-    { "neighbor", FNeighbor },
-    { "simplex", FSimplex },
-    { "print_simplex", FPrintSimplex },
+    { "coords", FCoords },
+    { "print", FPrintSimplex },
+    { NULL,     NULL    }
+};
+
+static const luaL_Reg R[] =
+{
     { "tree", Ftree_new },
     { "search_all", Ftree_search_all },
     { "compat_bisect", Ftree_compat_bisect },
@@ -255,7 +244,7 @@ static const luaL_Reg R[] =
     { "leaf_count", Ftree_leaf_count },
     { "emit_idxs", Ftree_emit_idxs },
     { "vertex_emit_coords", Ftree_vertex_emit_coords },
-    { "subdivide_while", Ftree_subdivide_while },
+    { "subdivide_until", Ftree_subdivide_until },
     { "__gc", Ftree_free },
     { NULL,     NULL    }
 };

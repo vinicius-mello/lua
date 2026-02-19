@@ -24,15 +24,6 @@ end
 function clown(x,y)
   x=1.5*x
   y=1.5*y-0.5
---[[  local xx=x*x
-  local yy=y*y
-  local t1 = (y-xx+1)
---  t1 = t1*t1
---  t1 = t1*t1
-  local t2 = (xx+yy)
---  t2 = t2*t2
---  t2 = t2*t2
-  return t1^4+t2^4-1]]
   return (y-x^2+1)^4+(x^2+y^2)^4-1
 end
 
@@ -51,10 +42,9 @@ function circle(x,y)
   return x*x+y*y-0.7
 end
 
-local f = clown
 local x=adia.var(1)
 local y=adia.var(2)
-local eq=f(x,y)
+local f=taubin(x,y)
 
 adia.__call = adia.eval_di
 
@@ -63,7 +53,7 @@ t:print_stats()
 
 t:subdivide_until(function(tree, code)
   local Ix, Iy = bb(code)
-  local I, grad = eq(Ix,Iy)
+  local I, grad = f(Ix,Iy)
   local dx = grad[1]
   local dy = grad[2]
   local dg = dx*dx+dy*dy
@@ -101,11 +91,9 @@ adia.__call = adia.eval_d
 
 newton = true
 
-function edge_point(x0,y0,x1,y1)
+function edge_point(x0,y0,x1,y1, f0, f1)
   -- g(t) = f((1-t)*x0+t*x1, (1-t)*y0+t*y1)
   -- g'(t) = grad f . (x1-x0, y1-y0)
-  local f0 = eq(x0,y0)
-  local f1 = eq(x1,y1)
   if f0>0 then
     x0,y0,x1,y1 = x1,y1,x0,y0
     f0,f1 = f1,f0
@@ -115,7 +103,7 @@ function edge_point(x0,y0,x1,y1)
   ix, iy = (1-t)*x0+t*x1, (1-t)*y0+t*y1
   if not newton then return ix, iy end
   for i=1,3 do 
-    local g, grad = eq(ix,iy)
+    local g, grad = f(ix,iy)
     local dg = grad[1]*(x1-x0)+grad[2]*(y1-y0)
     if math.abs(g) < 1e-6 or math.abs(dg) < 1e-6 then break end
     t = t - g/dg -- Newton step
@@ -139,22 +127,22 @@ function draw_triangle(x0,y0,x1,y1,x2,y2)
     :stroke()
 
   if e12<0 and e20<0 then
-    ix, iy = edge_point(x1,y1,x2,y2)
-    jx, jy = edge_point(x2,y2,x0,y0)
+    ix, iy = edge_point(x1,y1,x2,y2,f1,f2)
+    jx, jy = edge_point(x2,y2,x0,y0,f2,f0)
   elseif e12<0 and e01<0 then
-    ix, iy = edge_point(x1,y1,x2,y2)
-    jx, jy = edge_point(x0,y0,x1,y1)  
+    ix, iy = edge_point(x1,y1,x2,y2,f1,f2)
+    jx, jy = edge_point(x0,y0,x1,y1,f0,f1)  
   elseif e20<0 and e01<0 then
-    ix, iy = edge_point(x2,y2,x0,y0)
-    jx, jy = edge_point(x0,y0,x1,y1)
+    ix, iy = edge_point(x2,y2,x0,y0,f2,f0)
+    jx, jy = edge_point(x0,y0,x1,y1,f0,f1)
+  else 
+    return
   end
-  if ix and iy and jx and jy then
-    doc:setlinewidth(0.001)
-      :setstroke(1.0,0.0,0.0)
-      :moveto(ix,iy)
-      :lineto(jx,jy)
-      :stroke()
-  end
+  doc:setlinewidth(0.001)
+    :setstroke(1.0,0.0,0.0)
+    :moveto(ix,iy)
+    :lineto(jx,jy)
+    :stroke()
 end
 
 

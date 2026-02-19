@@ -379,6 +379,7 @@ struct LPT(tree_s) {
 
 typedef struct LPT(tree_s) LPT(tree);
 
+/*
 uint64_t LPT(hash)(ulong code) {
   uint64_t x = LPT_BITS_MASK & code;
   x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ll;
@@ -386,13 +387,17 @@ uint64_t LPT(hash)(ulong code) {
   x = x ^ (x >> 31);
   return x;
 }
+*/
+
+uint64_t lpt_hash(uint64_t code);
+size_t next_tab_size(size_t n);
 
 bool LPT(tree_insert)(LPT(tree) *tree, lpt code, bool leaf);
 bool LPT(tree_vertex_insert)(LPT(tree) *tree, ulong mcode);
 
 LPT(tree) * LPT(tree_new)(size_t buckets)
 {
-  buckets = (buckets < 256) ? 256 : buckets;
+  buckets = next_tab_size(buckets);
   LPT(tree) * tree = (LPT(tree) *)malloc(sizeof(LPT(tree)));  
   tree->cell_slots = (lpt *)calloc(buckets, sizeof(lpt));
   tree->cells = 0;
@@ -457,15 +462,19 @@ bool LPT(tree_insert)(LPT(tree) *tree, lpt code, bool leaf)
 {
   float load_factor = (float)(tree->cells) / (float)(tree->cell_buckets);
   if (load_factor > 0.7f)
-    LPT(tree_rehash)(tree, tree->cell_buckets * 2);
-  size_t hash = (LPT(hash)(code.code)) % tree->cell_buckets;
+    LPT(tree_rehash)(tree, next_tab_size(tree->cell_buckets));
+  size_t hash = (lpt_hash(code.code & LPT_BITS_MASK)) % tree->cell_buckets;
+  int collision_flag = 1;
   while ((tree->cell_slots[hash].code & LPT_PRESENT_BIT) != 0)
   {
     if ((tree->cell_slots[hash].code & LPT_BITS_MASK)
          == (code.code & LPT_BITS_MASK)) {
       return false; // already present
     }
-    tree->cell_collisions++;
+    if(collision_flag) {
+      tree->cell_collisions++;
+      collision_flag = 0;
+    }
     hash = (hash + 1) % tree->cell_buckets;
   }
   tree->cell_slots[hash].code = code.code 
@@ -481,13 +490,17 @@ void LPT(tree_vertex_rehash)(LPT(tree) *tree, size_t new_buckets);
 bool LPT(tree_vertex_insert)(LPT(tree) *tree, ulong mcode) {
   float load_factor = (float)(tree->vertices) / (float)(tree->vert_buckets);
   if (load_factor > 0.7f)
-    LPT(tree_vertex_rehash)(tree, tree->vert_buckets * 2);
-  size_t hash = LPT(hash)(mcode) % tree->vert_buckets;
+    LPT(tree_vertex_rehash)(tree, next_tab_size(tree->vert_buckets));
+  size_t hash = lpt_hash(mcode & LPT_BITS_MASK) % tree->vert_buckets;
+  int collision_flag = 1;
   while((tree->vert_slots[hash].flags & LPT_VERTEX_PRESENT_BIT) != 0) {
     if(tree->vert_slots[hash].mcode == mcode) {
       return false; // already present
     }
-    tree->vert_collisions++;
+    if(collision_flag) {
+      tree->vert_collisions++;
+      collision_flag = 0;
+    } 
     hash = (hash + 1) % tree->vert_buckets;
   }
   tree->vert_slots[hash].mcode = mcode;
@@ -498,7 +511,7 @@ bool LPT(tree_vertex_insert)(LPT(tree) *tree, ulong mcode) {
 }
 
 int LPT(tree_vertex_find_id)(LPT(tree) *tree, ulong mcode) {
-  size_t hash = LPT(hash)(mcode) % tree->vert_buckets;
+  size_t hash = lpt_hash(mcode & LPT_BITS_MASK) % tree->vert_buckets;
   while((tree->vert_slots[hash].flags & LPT_VERTEX_PRESENT_BIT) != 0) {
     if(tree->vert_slots[hash].mcode == mcode) {
       return tree->vert_slots[hash].id;
@@ -510,7 +523,7 @@ int LPT(tree_vertex_find_id)(LPT(tree) *tree, ulong mcode) {
 
 int LPT(tree_find)(LPT(tree) *tree, lpt code)
 {
-  size_t hash = (LPT(hash)(code.code)) % tree->cell_buckets;
+  size_t hash = (lpt_hash(code.code & LPT_BITS_MASK)) % tree->cell_buckets;
   while ((tree->cell_slots[hash].code & LPT_PRESENT_BIT) != 0)
   {
     if ((tree->cell_slots[hash].code & LPT_BITS_MASK) 

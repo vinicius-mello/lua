@@ -454,12 +454,24 @@ void dual_number_log(int nvars, double *a, double *c) {
   }
 }
 
+static void * work_mem = NULL;
+static size_t work_mem_size = 0;
+
+static void * get_work_mem(size_t size) {
+  if(work_mem_size < size) {
+    if(work_mem) free(work_mem);
+    work_mem = malloc(size);
+    work_mem_size = size;
+  }
+  return work_mem;
+}
+
 static int Feval_d(lua_State * L) {
   struct rpn_cmds *cmds = (struct rpn_cmds *)luaL_checkudata(L, 1, "RPN");
   const int stack_size = 32;
   double * stack[stack_size];
   int nvars = lua_gettop(L) - 1;
-  double * temp = (double *)malloc(sizeof(double)*(nvars+1)*(stack_size+1));
+  double * temp = (double *)get_work_mem(sizeof(double)*(nvars+1)*(stack_size+1));
   for(int i=0;i<stack_size;++i) {
     stack[i] = temp + (i+1)*(nvars+1);
   }
@@ -502,7 +514,6 @@ static int Feval_d(lua_State * L) {
     lua_pushnumber(L, stack[0][i]);
     lua_rawseti(L, -2, i);
   } 
-  free(temp);
   return 2;
 }
 
@@ -591,7 +602,7 @@ static int Feval_di(lua_State * L) {
   const int stack_size = 32;
   interval * stack[stack_size];
   int nvars = lua_gettop(L) - 1;
-  interval * temp = (interval *)malloc(sizeof(interval)*(nvars+1)*(stack_size+1));
+  interval * temp = (interval *)get_work_mem(sizeof(interval)*(nvars+1)*(stack_size+1));
   for(int i=0;i<stack_size;++i) {
     stack[i] = temp + (i+1)*(nvars+1);
   }
@@ -638,7 +649,6 @@ static int Feval_di(lua_State * L) {
     *derivative = stack[0][i];
     lua_rawseti(L, -2, i);
   } 
-  free(temp);
   return 2;
 }
 

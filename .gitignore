@@ -4,4 +4,5 @@
 *.ply
 *.dat
 test
-libs/
+libs/*.so
+libs/*.lua

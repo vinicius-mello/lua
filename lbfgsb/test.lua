@@ -1,48 +1,54 @@
+package.cpath = "../libs/?.so;" .. package.cpath
 package.cpath = "./?.so;" .. package.cpath
 array = require "array"
 lbfgsb = require "lbfgsb"
 
-opt = lbfgsb.new {
-    n_max = 25,
-    m_max = 5
-}
-
-opt.iprint = 1
-local n = opt.n 
+n = 100
+x = array.double { rows=n, cols=1 }
+g = array.double { rows=n, cols=1 }
+lower = array.double { rows=n, cols=1 }
+upper = array.double { rows=n, cols=1 }
+nbd = array.int { rows=n, cols=1 }
 
 for i=1,n,2 do
-  opt.lower[i] = 1
-  opt.upper[i] = 100
-  opt.nbd[i] = 2
+  lower[i] = 1
+  upper[i] = 100
+  nbd[i] = 2
 end
 
 for i=2,n,2 do
-    opt.lower[i] = -100
-    opt.upper[i] = 100
-    opt.nbd[i] = 2
+  lower[i] = -100
+  upper[i] = 100
+  nbd[i] = 2
 end
 
 for i=1,n do
-    opt.x[i] = 3
+  x[i] = 3
 end
 
-repeat
-  opt:call()
-  if opt.task:sub(1,2) == "FG" then
-    local x = opt.x
-    local g = opt.g
-    local f = .25*(x[1]-1)^2
-    for i=2,n do
-      f = f + (x[i]- x[i-1]^2)^2
-    end
-    opt.f = 4*f
-    local t1=x[2]-x[1]^2
-    g[1] = 2*(x[1]-1)-16*x[1]*t1
-    for i=2,n-1 do
-      local t2=t1
-      t1=x[i+1]-x[i]^2
-      g[i] = 8*t2-16*x[i]*t1   
-    end
-    g[n] = 8*t1
+opt = lbfgsb.new {
+  x = x,
+  g = g,
+  lower = lower,
+  upper = upper,
+  nbd = nbd,
+  m = 5,
+  iprint = -1
+}
+
+function fg(x,g)
+  local f = 0
+  for i=1,n-1 do
+    f = f + 100*(x[i+1]-x[i]^2)^2+(x[i]-1)^2
   end
-until opt.task:sub(1,2) ~= "FG" and opt.task:sub(1,5)~="NEW_X"
+  for i=2,n-1 do
+    g[i] = 200*(x[i]-x[i-1]^2)-400*(x[i+1]-x[i]^2)*x[i]+2*(x[i]-1)
+  end
+  g[1] = 2*(x[1]-1)-400*(x[2]-x[1]^2)*x[1]
+  g[n] = 200*(x[n]-x[n-1]^2)
+  return f
+end
+
+opt:minimize(fg)
+
+print(x)

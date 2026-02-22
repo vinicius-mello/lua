@@ -240,7 +240,7 @@ c-jlm-jn
      +          lwy,lsy,lss,lwt,lwn,lsnd
 
       if (task(1:5) .eq. 'START') then
-         write (6,*) 'START!'
+c         write (6,*) 'START!'
          isave(1)  = m*n
          isave(2)  = m**2
          isave(3)  = 4*m**2

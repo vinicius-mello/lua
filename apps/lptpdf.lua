@@ -44,7 +44,7 @@ end
 
 local x=adia.var(1)
 local y=adia.var(2)
-local f=taubin(x,y)
+local f=clown(x,y)
 
 adia.__call = adia.eval_di
 
@@ -57,8 +57,8 @@ t:subdivide_until(function(tree, code)
   local dx = grad[1]
   local dy = grad[2]
   local dg = dx*dx+dy*dy
-  return (not I:contains(0)) or (not dg:contains(0) and code:simplex_level() >=8) or code:simplex_level() >=16
-  --return (not I:contains(0)) or code:simplex_level() >=16
+  --return (not I:contains(0)) or (not dg:contains(0) and code:simplex_level() >=8) or code:simplex_level() >=16
+  return (not I:contains(0)) or code:simplex_level() >=18
 end)
 
 t:print_stats()
@@ -112,8 +112,57 @@ function edge_point(x0,y0,x1,y1, f0, f1)
   return ix, iy
 end
 
+local boundary_vert = {}
+local inside_vert = {}
+local closest_vert = {}
+
+function set_closest(i,xi,yi,xj,yj,fi,fj)
+  local x, y = edge_point(xi,yi,xj,yj,fi,fj)
+  if not closest_vert[i] then
+    closest_vert[i] = {x=x,y=y,dist=(x-xi)^2+(y-yi)^2}
+  else
+    local dist = (x-xi)^2+(y-yi)^2
+    if dist < closest_vert[i].dist then
+      closest_vert[i] = {x=x,y=y,dist=dist}
+    end
+  end
+end
+
+function process_triangle(i,j,k)
+  local xi,yi = coords:get(i,1), coords:get(i,2)
+  local xj,yj = coords:get(j,1), coords:get(j,2)
+  local xk,yk = coords:get(k,1), coords:get(k,2)
+  local fi = f(xi,yi)
+  local fj = f(xj,yj)
+  local fk = f(xk,yk)
+  local si = math.sign(fi)
+  local sj = math.sign(fj)
+  local sk = math.sign(fk)
+  for l=1,3 do
+    if si<0 then
+      inside_vert[i] = true
+      if sj>0 then
+        boundary_vert[i] = true
+        set_closest(i,xi,yi,xj,yj,fi,fj)
+      end
+    end
+    if sj<0 then
+      inside_vert[j] = true
+      if si>0 then
+        boundary_vert[j] = true
+        set_closest(j,xj,yj,xi,yi,fj,fi)
+      end
+    end
+    i,j,k = j,k,i
+    fi,fj,fk = fj,fk,fi
+    xi,xj,xk = xj,xk,xi
+    yi,yj,yk = yj,yk,yi
+    si,sj,sk = sj,sk,si
+  end
+end 
+
 function draw_triangle(x0,y0,x1,y1,x2,y2) 
-  local f0 = f(x0,y0)
+--[[  local f0 = f(x0,y0)
   local f1 = f(x1,y1)
   local f2 = f(x2,y2)
   local e12 = math.sign(f1)*math.sign(f2)
@@ -121,11 +170,15 @@ function draw_triangle(x0,y0,x1,y1,x2,y2)
   local e01 = math.sign(f0)*math.sign(f1)
   local ix, iy, jx, jy
 
+  if f0<0 and f1<0 and f2<0 then
+    doc:triangle(x0,y0,x1,y1,x2,y2):setfill(0.8,0.8,0.8):fill()
+  end
+]]
   doc:triangle(x0,y0,x1,y1,x2,y2)
     :setlinewidth(0.0005)
     :setstroke(0.0,0.0,1.0)
     :stroke()
-
+--[[
   if e12<0 and e20<0 then
     ix, iy = edge_point(x1,y1,x2,y2,f1,f2)
     jx, jy = edge_point(x2,y2,x0,y0,f2,f0)
@@ -142,7 +195,7 @@ function draw_triangle(x0,y0,x1,y1,x2,y2)
     :setstroke(1.0,0.0,0.0)
     :moveto(ix,iy)
     :lineto(jx,jy)
-    :stroke()
+    :stroke()]]
 end
 
 
@@ -150,11 +203,26 @@ for r=1,idxs:rows() do
   local i = idxs:get(r,1)+1
   local j = idxs:get(r,2)+1
   local k = idxs:get(r,3)+1
-  draw_triangle(
-    coords:get(i,1), coords:get(i,2),
-    coords:get(j,1), coords:get(j,2),
-    coords:get(k,1), coords:get(k,2)
-  )
+  process_triangle(i,j,k)
+end
+
+for i, p in pairs(closest_vert) do
+  coords:set(i,1,p.x)
+  coords:set(i,2,p.y)
+end
+
+for r=1,idxs:rows() do
+  local i = idxs:get(r,1)+1
+  local j = idxs:get(r,2)+1
+  local k = idxs:get(r,3)+1
+  if (inside_vert[i] and inside_vert[j] and inside_vert[k])
+   and not (boundary_vert[i] and boundary_vert[j] and boundary_vert[k]) then
+    draw_triangle(
+      coords:get(i,1), coords:get(i,2),
+      coords:get(j,1), coords:get(j,2),
+      coords:get(k,1), coords:get(k,2)
+    )
+  end
 end
 
 doc:enddoc()

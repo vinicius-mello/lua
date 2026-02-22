@@ -3,7 +3,8 @@ include ../make.inc
 MYCFLAGS= $(CFLAGS) -I$(LUA_INCDIR)
 
 FC = gfortran
-FFLAGS = -c -Wall -fbounds-check -g -Wno-uninitialized 
+FFLAGS = -c -Wall -Wno-uninitialized -Os -s -fdata-sections -ffunction-sections -Wl,--gc-sections
+
 #-fc-prototypes-external
 
 lbfgsb.so: lbfgsb.c lbfgsb.o linpack.o blas.o timer.o

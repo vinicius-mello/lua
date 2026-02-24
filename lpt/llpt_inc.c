@@ -317,6 +317,7 @@ static const luaL_Reg R[] =
     { "print_stats", Ftree_print_stats },
     { "vertex_count", Ftree_vertex_count },
     { "leaf_count", Ftree_leaf_count },
+    { "ids", Ftree_cell_ids },
     { "emit_idxs", Ftree_emit_idxs },
     { "vertex_emit_coords", Ftree_vertex_emit_coords },
     { "subdivide_until", Ftree_subdivide_until },

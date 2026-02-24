@@ -822,7 +822,7 @@ void LPT(tree_vertex_emit_coords)(LPT(tree) *tree, double * coords) {
   }
 }
 
-void LPT(tree_cell_ids)(LPT(tree) *tree), lpt code, int * ids) {
+void LPT(tree_cell_ids)(LPT(tree) *tree, lpt code, int * ids) {
   double s[DIM + 1][DIM]; 
   LPT(simplex)(code, &s[0][0]); 
   for(int j=0;j<=DIM;++j) {

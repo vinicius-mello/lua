@@ -822,18 +822,27 @@ void LPT(tree_vertex_emit_coords)(LPT(tree) *tree, double * coords) {
   }
 }
 
-void LPT(tree_emit_idxs)(LPT(tree) *tree, int * idxs) {
+void LPT(tree_cell_ids)(LPT(tree) *tree), lpt code, int * ids) {
+  double s[DIM + 1][DIM]; 
+  LPT(simplex)(code, &s[0][0]); 
+  for(int j=0;j<=DIM;++j) {
+    ulong mcode = morton_encode(DIM, &s[j][0]);
+    int vid = LPT(tree_vertex_find_id)(tree, mcode);
+    ids[j] = vid;
+  }
+}
+
+void LPT(tree_emit_idxs)(LPT(tree) *tree, int * idxs, bool ori) {
   size_t k = 0;
   for(size_t i=0;i<tree->cell_buckets;++i) {
     lpt slot = tree->cell_slots[i];
     if(slot.code & (LPT_LEAF_BIT)) { 
       lpt code = {slot.code & LPT_BITS_MASK}; 
-      double s[DIM + 1][DIM]; 
-      LPT(simplex)(code, &s[0][0]); 
-      for(int j=0;j<=DIM;++j) {
-        ulong mcode = morton_encode(DIM, &s[j][0]);
-        int vid = LPT(tree_vertex_find_id)(tree, mcode);
-        idxs[(DIM+1)*(k)+ j] = vid;
+      LPT(tree_cell_ids)(tree, code, &idxs[(DIM+1)*k]);
+      if(ori && LPT(orientation)(code)<0) { // swap last two vertices for negative orientation
+        int temp = idxs[(DIM+1)*k + DIM-1];
+        idxs[(DIM+1)*k + DIM-1] = idxs[(DIM+1)*k + DIM];
+        idxs[(DIM+1)*k + DIM] = temp;
       }
       k++;
     }
@@ -861,4 +870,31 @@ void LPT(tree_subdivide_until)(LPT(tree) *tree, bool (*test)(lpt, void*), void *
       LPT(tree_compat_bisect)(tree, code, LPT(subdivide_cb), NULL, q);
     }
   }
+  lpt_queue_free(q);
+}
+
+void LPT(subdivide_point_cb)(lpt code, void *udata) {
+  lpt_queue *q = (lpt_queue *)udata;
+  lpt_queue_pushright(q, LPT(tointeger)(code));
+}
+
+void LPT(tree_subdivide_point)(LPT(tree) *tree, double * point, int level, void (*visit)(lpt,void*), void *udata) {
+  lpt_queue * q = lpt_queue_new(256);
+  int flag;
+  do {
+    LPT(tree_search_all)(tree, point, LPT(subdivide_point_cb), q);
+    flag = 1;
+    while(!lpt_queue_empty(q)) {
+      lpt code = {lpt_queue_popleft(q)};
+      if(LPT(tree_is_leaf)(tree, code)&&LPT(simplex_level)(code) < level) {
+        LPT(tree_compat_bisect)(tree, code, NULL, NULL, NULL);
+        flag = 0;
+      }
+    }
+  } while(flag);
+  while(!lpt_queue_empty(q)) {
+    lpt code = {lpt_queue_popleft(q)};
+    if(visit) visit(code, udata);
+  }
+  lpt_queue_free(q);
 }

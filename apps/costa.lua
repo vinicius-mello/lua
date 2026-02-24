@@ -1,136 +1,62 @@
+package.cpath = "../libs/?.so;" .. package.cpath
+package.path = "../libs/?.lua;" .. package.path
+
 complex = require("complex")
 weierstrass = require("weierstrass")
-lpt = require("lpt")
+lpt = require("lpt2")
 array = require("array")
 ply = require("ply")
 
+local t = lpt.tree(1024)
 
--- tetrahedra tree
-tree=lpt.lpt2d_tree()
+local min_depth = 8
+local max_depth = 12
 
--- subdivide tetrahedra three until point p be inside of a
--- tetrahedron of level level
-function subdivide_to(pnt, level)
-    tree:search_all(pnt:data())
-		local r = {}
-		local rec = {}
-		repeat
-			local leaf = tree:recent_code()
-			rec[#rec+1] = leaf
-			if leaf:simplex_level()<level then
-				r[#r+1] = leaf
-			end
-		until not tree:recent_next()
-		if #r==0 then return rec end
-		for i=1,#r do
-			local leaf = r[i] 
-			if tree:is_leaf(leaf) then 
-				tree:compat_bisect(leaf)
-			end
-		end
-		return subdivide_to(pnt, level)
-end
+t:subdivide_until(function(tree, code)
+	return code:simplex_level() >=min_depth
+end)
 
-function print_array(a) 
-	for i=1, a:height() do
-		local line = ""
-		for j=1, a:width() do
-			line = line ..a:get(i-1, j-1).." "
-		end
-		print(line)
+local poles = array.double { rows = 8, cols = 2,
+  -1, -1,
+	 0, -1,
+	 1, -1,
+	-1,  0,
+	 1,  0,
+	-1,  1,
+	 0,  1,
+	 1,  1
+}
+
+local pt = array.double {rows = 2}
+
+local nb_infinity = {}
+for i=1,poles:rows() do
+	pt:set(1, poles:get(i,1))
+	pt:set(2, poles:get(i,2))
+	local v = t:subdivide_point(pt, max_depth)
+	for j=1,#v do
+		nb_infinity[v[j]:id()] = true
 	end
 end
 
-function set_array(a, t) 
-	for i=1, a:height() do
-		for j=1, a:width() do
-			a:set(i-1, j-1, t[i][j])
-		end
-	end
+function tablelength(T)
+  local count = 0
+  for _ in pairs(T) do count = count + 1 end
+  return count
 end
 
-poles = array.double(8,2)
-set_array(poles, {
-	{-1,-1}, {0,-1},{1,-1},
-	{-1,0}, {1,0},
-	{-1,1}, {0,1},{1,1}
-})
+local vtx = t:vertex_emit_coords()
+local idx = array.uint { rows = t:leaf_count()-tablelength(nb_infinity), cols = 3 }
 
-max_level = 15
-pole_face = {}
-for i=1,poles:height() do
-  local r = subdivide_to(poles:row(i-1), max_level)
-	for j=1,#r do
-		pole_face[lpt.hash(r[j])] = true 
-	end
-end
-
-fts = {}
-tree:node_reset()
-repeat
-  if tree:node_is_leaf() then
-    local cur=tree:node_code()
-		if not pole_face[lpt.hash(cur)] then 
-			fts[#fts+1] = cur
-		end
-	end
-until not tree:node_next()
-
-function test_face(f)
-	return f:simplex_level()<14
-end
-
-local cf = 1
-repeat
-	local cur = fts[cf]
-	if tree:is_leaf(cur) and test_face(cur) then 
-		tree:compat_bisect(cur)
-		repeat
-			local leaf = tree:recent_code()
-			fts[#fts+1] = leaf
-		until not tree:recent_next()
-	end
-	cf = cf+1
-until cf>#fts
-
-vert = array.double(6)
-vert_hash = {}
-vtx = {}
-idx = {}
-
-tree:node_reset()
-repeat
-  if tree:node_is_leaf() then
-    local cur=tree:node_code()
-		if not pole_face[lpt.hash(cur)] then 
-    	local id=tree:node_id()
-    	cur:simplex(vert:data())
-			local vs = {}
-			vs[1] = { vert:get(0), vert:get(1) }
-			vs[2] = { vert:get(2), vert:get(3) }
-			vs[3] = { vert:get(4), vert:get(5) }
-			if cur:orientation()<0 then
-				vs[2], vs[3] = vs[3], vs[2]
-			end
-			local vi = {}
-			for i=1,3 do
-				local v = vs[i]
-				local x = (0.5*v[1]+0.5) % 1
-				local y = (0.5*v[2]+0.5) % 1
-				local code = lpt.morton2_16(2*x-1, 2*y-1)
-				local vh = vert_hash[code]
-				if vh == nil then
-					vtx[#vtx+1] = { x, y}
-					vert_hash[code] = #vtx
-					vi[i] = #vtx-1
-				else
-					vi[i] = vh-1
-				end
-			end
-			idx[#idx+1] = vi
-  	end
-	end
-until not tree:node_next()
+local ii = 0
+t:visit_leafs(function(tree, leaf)
+	if nb_infinity[leaf:id()] then return end
+	local v = tree:leaf_vertex_ids(leaf)
+	idx:set(ii, 1, v[1])
+	idx:set(ii, 2, v[2])
+	idx:set(ii, 3, v[3])
+	ii = ii + 1
+end)
 
 ply_o = {
 	format = "ascii",

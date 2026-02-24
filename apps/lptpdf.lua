@@ -5,6 +5,8 @@ local array = require "array"
 local lpt = require "lpt2"
 local adia = require "adia"
 local interval = adia.interval
+local cg = require "cg"
+local ply = require "ply"
 
 local c = array.double { rows=3, cols =2 }
 
@@ -29,7 +31,7 @@ end
 
 function taubin(x,y)
   x=2*x
-  y=2*y
+  y=2*y+0.4
   local xx=x*x
   local yy=y*y
   local xy=x*y
@@ -44,12 +46,14 @@ end
 
 local x=adia.var(1)
 local y=adia.var(2)
-local f=clown(x,y)
+local f=taubin(x,y)
 
-adia.__call = adia.eval_di
+adia.__call = adia.eval_dual_interval
 
 local t = lpt.tree(1024)
 t:print_stats()
+
+local max_depth = 12
 
 t:subdivide_until(function(tree, code)
   local Ix, Iy = bb(code)
@@ -57,8 +61,9 @@ t:subdivide_until(function(tree, code)
   local dx = grad[1]
   local dy = grad[2]
   local dg = dx*dx+dy*dy
-  --return (not I:contains(0)) or (not dg:contains(0) and code:simplex_level() >=8) or code:simplex_level() >=16
-  return (not I:contains(0)) or code:simplex_level() >=18
+  --return (not I:contains(0)) or (not dg:contains(0) and code:simplex_level() >=max_depth/2) or code:simplex_level() >=max_depth
+  --return (not I:contains(0)) or code:simplex_level() >=max_depth
+  return code:simplex_level() >=max_depth
 end)
 
 t:print_stats()
@@ -87,7 +92,7 @@ function math.sign(x)
   end
 end
 
-adia.__call = adia.eval_d
+adia.__call = adia.eval_dual
 
 newton = true
 
@@ -116,8 +121,29 @@ local boundary_vert = {}
 local inside_vert = {}
 local closest_vert = {}
 
+function project_curve(x0,y0,x1,y1)
+  local dx = (x1-x0)/2
+  local dy = (y1-y0)/2
+  local len = math.sqrt(dx*dx+dy*dy)
+  local f0, grad0 = f(x0,y0)
+  local n = math.sqrt(grad0[1]*grad0[1]+grad0[2]*grad0[2])
+  grad0[1], grad0[2] = grad0[1]/n, grad0[2]/n
+  dx, dy = grad0[1]*len, grad0[2]*len
+  for i = 1,10 do
+    x0,y0 = x0+dx, y0+dy
+    local f = f(x0,y0)
+    if f*f0 < 0 then
+      dx = -dx/2
+      dy = -dy/2
+    end
+    f0 = f
+  end
+  return x0, y0
+end
+
 function set_closest(i,xi,yi,xj,yj,fi,fj)
-  local x, y = edge_point(xi,yi,xj,yj,fi,fj)
+  --local x, y = edge_point(xi,yi,xj,yj,fi,fj)
+  local x,y = project_curve(xi,yi,xj,yj)
   if not closest_vert[i] then
     closest_vert[i] = {x=x,y=y,dist=(x-xi)^2+(y-yi)^2}
   else
@@ -206,10 +232,7 @@ for r=1,idxs:rows() do
   process_triangle(i,j,k)
 end
 
-for i, p in pairs(closest_vert) do
-  coords:set(i,1,p.x)
-  coords:set(i,2,p.y)
-end
+local inside_triangle = {}
 
 for r=1,idxs:rows() do
   local i = idxs:get(r,1)+1
@@ -217,12 +240,164 @@ for r=1,idxs:rows() do
   local k = idxs:get(r,3)+1
   if (inside_vert[i] and inside_vert[j] and inside_vert[k])
    and not (boundary_vert[i] and boundary_vert[j] and boundary_vert[k]) then
-    draw_triangle(
-      coords:get(i,1), coords:get(i,2),
-      coords:get(j,1), coords:get(j,2),
-      coords:get(k,1), coords:get(k,2)
-    )
+    inside_triangle[#inside_triangle+1] = r
+
+    local xi,yi =  coords:get(i,1), coords:get(i,2)
+    local xj,yj =  coords:get(j,1), coords:get(j,2)
+    local xk,yk =  coords:get(k,1), coords:get(k,2)
+    for l=1,3 do
+      local ux=xj-xi
+      local uy=yj-yi
+      local vx=xk-xi
+      local vy=yk-yi
+      if math.abs(ux*vx+uy*vy) < 1e-8 then
+        break
+      end
+      xi,yi,xj,yj,xk,yk = xj,yj,xk,yk,xi,yi
+      i,j,k = j,k,i
+    end
+    idxs:set(r,1,i-1)  
+    idxs:set(r,2,j-1)
+    idxs:set(r,3,k-1)
   end
 end
+
+for i, p in pairs(closest_vert) do
+  coords:set(i,1,p.x)
+  coords:set(i,2,p.y)
+end
+
+local k_angle = 8.0
+
+function triangle_cost(x0,y0,x1,y1,x2,y2)
+  local ux = x1-x0
+  local uy = y1-y0
+  local vx = x2-x0
+  local vy = y2-y0
+  local wx = x2-x1
+  local wy = y2-y1
+  local nu2 = ux*ux+uy*uy
+  local nv2 = vx*vx+vy*vy
+  local nw2 = wx*wx+wy*wy
+  return (k_angle*(ux*vx+uy*vy)^2/(nu2*nv2)+nu2/nv2+nv2/nu2-2.0)
+end
+
+adia.__call = adia.eval_dual_array
+
+local triangle_cost_ad = triangle_cost(
+  adia.var(1), adia.var(2),
+  adia.var(3), adia.var(4),
+  adia.var(5), adia.var(6)
+)
+
+local xt = array.double { rows=6, cols=1 }
+local gt = array.double { rows=6, cols=1 }
+
+function fg(x,g)
+  g:zero()
+  local f_total = 0
+  for l=1,#inside_triangle do
+    local r = inside_triangle[l]
+    local i = idxs:get(r,1)+1
+    local j = idxs:get(r,2)+1 
+    local k = idxs:get(r,3)+1
+    xt:set(1,1,x:get(i,1))
+    xt:set(2,1,x:get(i,2))
+    xt:set(3,1,x:get(j,1))
+    xt:set(4,1,x:get(j,2))
+    xt:set(5,1,x:get(k,1))
+    xt:set(6,1,x:get(k,2))
+    local ft = triangle_cost_ad(xt,gt)
+    f_total = f_total + ft
+    g:add_to_entry(i,1,gt:get(1,1))
+    g:add_to_entry(i,2,gt:get(2,1))
+    g:add_to_entry(j,1,gt:get(3,1))
+    g:add_to_entry(j,2,gt:get(4,1))
+    g:add_to_entry(k,1,gt:get(5,1))
+    g:add_to_entry(k,2,gt:get(6,1))
+  end
+  for i, p in pairs(closest_vert) do
+--[[    local xi,yi = coords:get(i,1), coords:get(i,2)
+    local fi, grad = f:eval_dual(xi,yi)
+    local gx, gy = g:get(i,1), g:get(i,2)
+    local proj_g = (gx*grad[1]+gy*grad[2])/(grad[1]*grad[1]+grad[2]*grad[2])
+    g:set(i,1,gx-proj_g*grad[1])
+    g:set(i,2,gy-proj_g*grad[2])]]
+    g:set(i,1,0)
+    g:set(i,2,0)
+  end
+  return f_total
+end
+
+local grad = array.double { rows= t:vertex_count(), cols = lpt.DIM }
+
+local opt = cg.new {
+  x = coords,
+  g = grad,
+  eps = 1e-6,
+  method = 3,
+  iprint1 = 0
+}
+
+opt:minimize(fg)
+
+
+for l=1,#inside_triangle do
+  local r = inside_triangle[l]
+  local i = idxs:get(r,1)+1
+  local j = idxs:get(r,2)+1 
+  local k = idxs:get(r,3)+1
+  draw_triangle(
+    coords:get(i,1), coords:get(i,2),
+    coords:get(j,1), coords:get(j,2),
+    coords:get(k,1), coords:get(k,2)
+  )
+end
+
+ply_o = {
+	format = "ascii",
+	"vertex",
+	"face",
+	vertex = {
+		size = t:vertex_count(),
+		"x", 
+		"y",
+		"z",
+		x = "float",
+		y = "float",
+		z = "float",
+	},
+	face = { size = #inside_triangle,
+		"vertex_indices",
+		vertex_indices = "list uchar int"
+	}
+}
+
+local inside_idx = {}
+for l=1,#inside_triangle do
+  local r = inside_triangle[l]
+  local i = idxs:get(r,1)
+  local j = idxs:get(r,2)
+  local k = idxs:get(r,3)
+  inside_idx[#inside_idx+1] = {i,j,k}
+endcode
+
+function ply_o.vertex_write_cb(i)
+--	x = string.format("%.8f", x)
+--	y = string.format("%.8f", y)
+--	z = string.format("%.8f", z)
+	return {x=coords:get(i+1,1), y=coords:get(i+1,2), z=0}
+end
+
+function ply_o.face_write_cb(i)
+	return {
+		vertex_indices = inside_idx[i+1]
+	}
+end
+
+ply.create("mesh.ply", ply_o)
+
+ply_o:write_data()
+
 
 doc:enddoc()

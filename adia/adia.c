@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include "fi_lib.h"
+#include "../array/array.h"
 
 
 enum rpn_ops {
@@ -517,6 +518,57 @@ static int Feval_d(lua_State * L) {
   return 2;
 }
 
+static int Feval_darray(lua_State * L) {
+  struct rpn_cmds *cmds = (struct rpn_cmds *)luaL_checkudata(L, 1, "RPN");
+  const int stack_size = 32;
+  double * stack[stack_size];
+  array * x_array = (array *)luaL_checkudata(L, 2, "array");
+  array * g_array = (array *)luaL_checkudata(L, 3, "array");
+  int nvars = x_array->cols*x_array->rows;
+  double * temp = (double *)get_work_mem(sizeof(double)*(nvars+1)*(stack_size+1));
+  for(int i=0;i<stack_size;++i) {
+    stack[i] = temp + (i+1)*(nvars+1);
+  }
+  size_t sp = 0;
+  for(size_t i=0;i<cmds->count;++i) {
+    if(cmds->nodes[i].type == rpn_op) {
+      switch(cmds->nodes[i].op) {
+        case rpn_add: dual_number_add(nvars, stack[sp-2], stack[sp-1], temp); sp--; break;
+        case rpn_sub: dual_number_sub(nvars, stack[sp-2], stack[sp-1], temp); sp--; break;
+        case rpn_mul: dual_number_mul(nvars, stack[sp-2], stack[sp-1], temp); sp--; break;
+        case rpn_div: dual_number_div(nvars, stack[sp-2], stack[sp-1], temp); sp--; break;
+        case rpn_pow: dual_number_ipow(nvars, stack[sp-2], (int)stack[sp-1][0], temp); sp--; break;
+        case rpn_sin: dual_number_sin(nvars, stack[sp-1], temp); break;
+        case rpn_cos: dual_number_cos(nvars, stack[sp-1], temp); break;
+        case rpn_tan: dual_number_tan(nvars, stack[sp-1], temp); break; 
+        case rpn_exp: dual_number_exp(nvars, stack[sp-1], temp); break;
+        case rpn_log: dual_number_log(nvars, stack[sp-1], temp); break;
+        case rpn_unm: dual_number_unm(nvars, stack[sp-1], temp); break;
+      }
+      memcpy(stack[sp-1], temp, sizeof(double)*(nvars+1));
+    } else if(cmds->nodes[i].type == rpn_var) {
+      int var_index = cmds->nodes[i].var;
+      double * num = stack[sp++];
+      num[0] = ((double *)x_array->ptr)[var_index-1];
+      for(int j=1;j<=nvars;++j) {
+        num[j] = (j == var_index) ? 1 : 0;
+      }
+    }
+    else {
+      double * num = stack[sp++];
+      num[0] = cmds->nodes[i].value;
+      for(int j=1;j<=nvars;++j) {
+        num[j] = 0;
+      }
+    }
+  }
+  lua_pushnumber(L, stack[0][0]);
+  for(int i=1;i<=nvars;++i) {
+    ((double *)g_array->ptr)[i-1] = stack[0][i];
+  } 
+  return 1;
+}
+
 void dual_interval_add(int nvars, interval *a, interval *b, interval *c) {
   for(int i=0;i<=nvars;++i) {
     c[i] = add_ii(a[i], b[i]);
@@ -693,10 +745,11 @@ static const luaL_Reg R[] =
   { "exp", Fexp},
   { "log", Flog},
   { "print", Fprint},
-  { "eval_n", Feval_n},
-  { "eval_d", Feval_d},
-  { "eval_i", Feval_i},
-  { "eval_di", Feval_di},
+  { "eval_number", Feval_n},
+  { "eval_dual", Feval_d},
+  { "eval_interval", Feval_i},
+  { "eval_dual_interval", Feval_di},
+  { "eval_dual_array", Feval_darray},
   { "__call", Feval_n},
 	{ NULL,		NULL	}
 };

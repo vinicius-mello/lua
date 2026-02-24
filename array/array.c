@@ -301,16 +301,36 @@ static int Fzero(lua_State *L) {
 	return 1;
 }
 
+static int Fset_all(lua_State *L) {
+	array * a = luaL_checkudata(L,1,MYTYPE);
+	lua_Number n = luaL_checknumber(L,2);
+	if(a->entry_type == et_float) {
+		float * ptr = (float *)a->ptr;
+		for(size_t i=0;i<a->rows*a->cols;++i) {
+			ptr[i] = (float) n;
+		}
+	} else if(a->entry_type == et_double) {
+		double * ptr = (double *)a->ptr;
+		for(size_t i=0;i<a->rows*a->cols;++i) {
+			ptr[i] = (double) n;
+		}
+	} else {
+		return luaL_error(L, "array:set_all: unsupported entry type for set_all");
+	}
+	return 1;
+}
+
 static int Fadd_to(lua_State *L) {
 	array * a = luaL_checkudata(L,1,MYTYPE);
-	array * b = luaL_checkudata(L,2,MYTYPE);
+	double sc = luaL_checknumber(L,2);
+	array * b = luaL_checkudata(L,3,MYTYPE);
 	if(a->cols != b->cols || a->rows != b->rows || a->entry_type != b->entry_type) {
 		return luaL_error(L, "array:add_to: incompatible arrays");
 	}
 	if(a->entry_type == et_float) {
 		cblas_saxpby(
 			a->cols*a->rows,
-			1.0,
+			(float) sc,
 			(float *)b->ptr, 1,
 			1.0,
 		(float *)a->ptr, 1
@@ -318,7 +338,7 @@ static int Fadd_to(lua_State *L) {
 	} else if(a->entry_type == et_double) {
 		cblas_daxpby(
 			a->cols*a->rows,
-			1.0,
+			(double) sc,
 			(double *)b->ptr, 1,	
 			1.0,
 		(double *)a->ptr, 1
@@ -700,6 +720,7 @@ static const luaL_Reg R[] =
 	{ "entry_type",	Fentry_type},
 	{ "copy",	Fcopy},
 	{ "zero",	Fzero},
+	{ "set_all",	Fset_all},
 	{ "add_to",	Fadd_to},
 	{ "add",	Fadd},
 	{ "__add", Fadd},

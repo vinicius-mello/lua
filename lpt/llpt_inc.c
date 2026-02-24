@@ -85,6 +85,41 @@ static int FPrintSimplex(lua_State *L) {
   return 0;
 }
 
+static int Ftostring(lua_State *L) {
+  lpt *r = luaL_checkudata(L, 1, CODE);
+  luaL_Buffer b;
+	luaL_buffinit(L,&b);
+  lua_pushinteger(L, LPT(level)(*r));
+  luaL_addvalue(&b);
+  for(int i=1;i<=DIM;++i) {
+    int p = LPT(sigperm)(*r, i);
+    if(p>0) {
+      luaL_addchar(&b,'+');
+      lua_pushinteger(L, p);
+      luaL_addvalue(&b);
+    } else {
+      luaL_addchar(&b,'-');
+      lua_pushinteger(L, -p);
+      luaL_addvalue(&b);
+    }
+  }
+	for(int i=0;i<LPT(orthant_level_get)(*r);++i) {
+    for(int j=0;j<DIM;++j) {
+      if(LPT(orthant_get)(*r, j)&(1<<(LPT(orthant_level_get)(*r)-1-i)))
+        luaL_addchar(&b,'-');
+      else luaL_addchar(&b,'+');
+    }
+  }
+	luaL_pushresult(&b);
+  return 1;
+}
+
+static int Fid(lua_State *L) {
+  lpt *r = luaL_checkudata(L, 1, CODE);
+  lua_pushlightuserdata(L, (void *)r);
+  return 1;
+}
+
 static int Ftree_new(lua_State *L) {
   size_t buckets = (size_t)luaL_checkinteger(L, 1);
   LPT(tree) ** t=lua_newuserdata(L,sizeof(LPT(tree)*));
@@ -156,6 +191,21 @@ static int Fleafs(lua_State *L) {
   return 1;
 } 
 
+static void visit_cb(lpt code, void *udata) {
+  lua_State *L = (lua_State *)udata;
+  lua_pushvalue(L, -1);
+  lua_pushvalue(L, -3);
+  lpt *c = Fnew_code(L);
+  *c = code;
+  lua_call(L, 2, 0);
+}
+
+static int Fvisit_leafs(lua_State *L) {
+  LPT(tree) **t = (LPT(tree) **)lua_touserdata(L, 1);
+  LPT(tree_visit_leafs)(*t, visit_cb, L);
+  return 0;
+} 
+
 static int Ftree_is_leaf(lua_State *L) {
   LPT(tree) **t = (LPT(tree) **)lua_touserdata(L, 1);
   lpt * code = luaL_checkudata(L, 2, CODE);
@@ -184,10 +234,24 @@ static int Ftree_leaf_count(lua_State *L) {
   return 1;
 }
 
+static int Ftree_cell_ids(lua_State *L) {
+  LPT(tree) **t = (LPT(tree) **)lua_touserdata(L, 1);
+  lpt * code = luaL_checkudata(L, 2, CODE);
+  int ids[DIM + 1];
+  LPT(tree_cell_ids)(*t, *code, ids);
+  lua_newtable(L);
+  for(int i=0;i<=DIM;++i) {
+    lua_pushinteger(L, ids[i]);
+    lua_rawseti(L, -2, i+1);
+  }
+  return 1;
+}
+
 static int Ftree_emit_idxs(lua_State *L) {
   LPT(tree) **t = (LPT(tree) **)lua_touserdata(L, 1);
   array *idxs = (array *)luaL_checkudata(L, 2, "array");
-  LPT(tree_emit_idxs)(*t, (int *)idxs->ptr);
+  bool ori = lua_isboolean(L, 3) ? lua_toboolean(L, 3) : true;
+  LPT(tree_emit_idxs)(*t, (int *)idxs->ptr, ori);
   return 1;
 }
 
@@ -216,6 +280,14 @@ static int Ftree_subdivide_until(lua_State *L) {
   return 0;
 }
 
+static int Ftree_subdivide_point(lua_State *L) {
+  LPT(tree) **t = (LPT(tree) **)lua_touserdata(L, 1);
+  array *point = (array *)luaL_checkudata(L, 2, "array");
+  int level = luaL_checkinteger(L, 3);
+  lua_newtable(L);
+  LPT(tree_subdivide_point)(*t, (double *)point->ptr, level, &add_to_table_cb, L);
+  return 1;
+}
 
 static const luaL_Reg Code[] =
 {
@@ -228,7 +300,9 @@ static const luaL_Reg Code[] =
     { "is_child0", FisChild0 },
     { "orientation", FOrientation },
     { "coords", FCoords },
+    { "__tostring", Ftostring },
     { "print", FPrintSimplex },
+    { "id", Fid },
     { NULL,     NULL    }
 };
 
@@ -239,12 +313,14 @@ static const luaL_Reg R[] =
     { "compat_bisect", Ftree_compat_bisect },
     { "is_leaf", Ftree_is_leaf },
     { "leafs", Fleafs },
+    { "visit_leafs", Fvisit_leafs },
     { "print_stats", Ftree_print_stats },
     { "vertex_count", Ftree_vertex_count },
     { "leaf_count", Ftree_leaf_count },
     { "emit_idxs", Ftree_emit_idxs },
     { "vertex_emit_coords", Ftree_vertex_emit_coords },
     { "subdivide_until", Ftree_subdivide_until },
+    { "subdivide_point", Ftree_subdivide_point },
     { "__gc", Ftree_free },
     { NULL,     NULL    }
 };

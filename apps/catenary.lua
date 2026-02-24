@@ -1,7 +1,8 @@
-require("ply")
-require("array")
-require("blas")
+package.cpath = "../libs/?.so;" .. package.cpath
+package.path = "../libs/?.lua;" .. package.path
 
+local ply = require("ply")
+local array = require("array")
 
 local max = math.max
 local min = math.min
@@ -14,29 +15,29 @@ local filename=arg[1]
 local mesh=ply.load(filename)
 mesh:print_header()
 
-local x = array.float(mesh.vertex.size)
-local y = array.float(mesh.vertex.size)
-local z = array.float(mesh.vertex.size)
-local t = array.float(mesh.vertex.size)
-local bdr = array.float(mesh.vertex.size)
-local gradF = array.float(mesh.vertex.size)
-local gradG = array.float(mesh.vertex.size)
-local idx = array.uint(mesh.face.size,3)
+local x = array.float { rows = mesh.vertex.size }
+local y = array.float { rows = mesh.vertex.size }
+local z = array.float { rows = mesh.vertex.size }
+local t = array.float { rows = mesh.vertex.size }
+local bdr = array.float { rows = mesh.vertex.size }
+local gradF = array.float { rows = mesh.vertex.size }
+local gradG = array.float { rows = mesh.vertex.size }
+local idx = array.uint { rows = mesh.face.size, cols = 3 }
 local edges = {}
 
 function mesh.vertex_read_cb(i,reg)
-    x:set(i, reg.x)
-    y:set(i, reg.y)
-    z:set(i, reg.z)
+    x:set(i+1, reg.x)
+    y:set(i+1, reg.y)
+    z:set(i+1, reg.z)
 end
 
 function mesh.face_read_cb(i,reg)
 	local vert = reg.vertex_indices
   for j=1,3 do 
-    idx:set(i,j-1,vert[j])
+    idx:set(i+1,j,vert[j])
   end
 	local function insert_edge(i,j)
-		i,j = min(vert[i],vert[j]),max(vert[i],vert[j]) 
+		i,j = min(vert[i],vert[j]),max(vert[i],vert[j])
 		local k = 
 			tostring(i).." "..tostring(j)
 		local t = edges[k]
@@ -58,8 +59,8 @@ mesh:read_data()
 for k,e in pairs(edges) do
 	print(e.faces, e.va, e.vb)
 	if e.faces == 1 then
-		bdr:set(e.va, 0)
-		bdr:set(e.vb, 0)
+		bdr:set(e.va+1, 0)
+		bdr:set(e.vb+1, 0)
 	end
 end
 
@@ -71,7 +72,7 @@ function sArea(xi,yi,xj,yj,xk,yk)
 end
 
 function coords(i) 
-	return x:get(i), y:get(i), z:get(i)
+	return x:get(i+1), y:get(i+1), z:get(i+1)
 end
 
 function triData(i,j,k)
@@ -91,28 +92,29 @@ end
 function compAll()
 	local s = 0
 	local a = 0
+
 	gradF:set_all(0)
 	gradG:set_all(0)
 	for l=0, mesh.face.size-1 do
-		local i,j,k = idx:get(l,0), 
-			idx:get(l,1), idx:get(l,2)
+		local i,j,k = idx:get(l+1,1), 
+			idx:get(l+1,2), idx:get(l+1,3)
 		local A,zi,zj,zk,dzi,dzj,dzk = triData(i,j,k)
 		s = s + (zi+zj+zk)*A
 		a = a + A
-		local bdi = bdr:get(i)
-		local bdj = bdr:get(j)
-		local bdk = bdr:get(k)
-		if bdr:get(i)==1 then
-		  gradF:set(i, gradF:get(i) + 1/3*(A+(zi+zj+zk)*dzi))
-			gradG:set(i, gradG:get(i) + dzi)
+		local bdi = bdr:get(i+1)
+		local bdj = bdr:get(j+1)
+		local bdk = bdr:get(k+1)
+		if bdr:get(i+1)==1 then
+		  gradF:add_to_entry(i+1, 1/3*(A+(zi+zj+zk)*dzi))
+			gradG:add_to_entry(i+1, dzi)
 		end
-		if bdr:get(j)==1 then 
-			gradF:set(j, gradF:get(j) + 1/3*(A+(zi+zj+zk)*dzj))
-			gradG:set(j, gradG:get(j) + dzj)
+		if bdr:get(j+1)==1 then 
+			gradF:add_to_entry(j+1, 1/3*(A+(zi+zj+zk)*dzj))
+			gradG:add_to_entry(j+1, dzj)
 		end
-		if bdr:get(k)==1 then 
-			gradF:set(k, gradF:get(k) + 1/3*(A+(zi+zj+zk)*dzk))
-			gradG:set(k, gradG:get(k) + dzk)
+		if bdr:get(k+1)==1 then 
+			gradF:add_to_entry(k+1, 1/3*(A+(zi+zj+zk)*dzk))
+			gradG:add_to_entry(k+1, dzk)
 		end
 	end
 	return 1/3*s,a
@@ -121,8 +123,8 @@ end
 local f,A0 = compAll()
 local A = A0
 for i=1,50000 do
-	blas.axpy(0.0001, gradF, z)
-	blas.axpy(-0.0001*(A-A0), gradG, z)
+	z:add_to(0.0001, gradF)
+	z:add_to(-0.0001*(A-A0), gradG)
   f,A = compAll()
 	if i%1000 == 0 then print(f,A) end
 end 
@@ -148,9 +150,9 @@ ply_o = {
 }
 
 function ply_o.vertex_write_cb(i)
-	local xc = x:get(i)
-	local yc = y:get(i)
-	local zc = z:get(i)
+	local xc = x:get(i+1)
+	local yc = y:get(i+1)
+	local zc = z:get(i+1)
 	xc = string.format("%.8f", xc)
 	yc = string.format("%.8f", yc)
 	zc = string.format("%.8f", zc)
@@ -158,7 +160,7 @@ function ply_o.vertex_write_cb(i)
 end
 
 function ply_o.face_write_cb(i)
-	local i,j,k = idx:get(i,0), idx:get(i,1), idx:get(i,2)
+	local i,j,k = idx:get(i+1,1), idx:get(i+1,2), idx:get(i+1,3)
 	return {
 		vertex_indices = {i, j, k}
 	}

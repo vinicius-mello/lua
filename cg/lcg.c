@@ -119,7 +119,8 @@ static int Fminimize(lua_State *L) {
         }
       }
     } else {
-      return luaL_error(L, "cg.minimize: cgfam_ returned with iflag=%d", data->iflag);
+      break;
+      //return luaL_error(L, "cg.minimize: cgfam_ returned with iflag=%d", data->iflag);
     }
   } 
   lua_pushnumber(L,data->f);

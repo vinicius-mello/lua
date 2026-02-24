@@ -1,3 +1,7 @@
+uint8_t LPT(level_get)(lpt code);
+int LPT(sigperm)(lpt code, int i);
+uint8_t LPT(orthant_level_get)(lpt code);
+unsigned int LPT(orthant_get)(lpt code, int i);
 void LPT(init)(lpt *code, uint8_t perm);
 uint64_t LPT(tointeger)(lpt code);
 lpt LPT(frominteger)(uint64_t code);
@@ -21,6 +25,8 @@ void LPT(tree_compat_bisect)(LPT(tree) *tree, lpt code, void (*subdivided)(lpt,v
 bool LPT(tree_is_leaf)(LPT(tree) *tree, lpt code);
 void LPT(tree_visit_leafs)(LPT(tree) *tree, void (*visit)(lpt,void*), void *udata);
 void LPT(tree_vertex_emit_coords)(LPT(tree) *tree, double * coords);
-void LPT(tree_emit_idxs)(LPT(tree) *tree, int * idxs);
+void LPT(tree_cell_ids)(LPT(tree) *tree, lpt code, int * ids);
+void LPT(tree_emit_idxs)(LPT(tree) *tree, int * idxs, bool ori);
 void LPT(tree_search_all)(LPT(tree) *tree, double * p, void (*visit)(lpt,void*), void *udata);
 void LPT(tree_subdivide_until)(LPT(tree) *tree, bool (*test)(lpt, void*), void *udata);
+void LPT(tree_subdivide_point)(LPT(tree) *tree, double * point, int level, void (*visit)(lpt,void*), void *udata);

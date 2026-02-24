@@ -6,6 +6,7 @@ local t = lpt.tree(1024)
 t:print_stats()
 
 t:subdivide_until(function(tree, code)
+  print(code:id())
   return code:simplex_level() == 6
 end)
 

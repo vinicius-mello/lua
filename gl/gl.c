@@ -51,6 +51,7 @@ static const luaL_IntegerConstant C[] = {
  {  "COLOR_BUFFER_BIT", GL_COLOR_BUFFER_BIT},
  {  "DEPTH_BUFFER_BIT", GL_DEPTH_BUFFER_BIT},
  {  "STENCIL_BUFFER_BIT", GL_STENCIL_BUFFER_BIT},
+ {  "VERSION", GL_VERSION},
  {   NULL, 0} };
 
 static int FInit(lua_State *L) {
@@ -319,6 +320,24 @@ static int FUniform(lua_State *L) {
   return 0; 
 }
 
+static int FListUniforms(lua_State *L) {
+  uint program = luaL_checkinteger(L, 1);
+  GLint nUniforms = 0;
+  glGetProgramiv(program, GL_ACTIVE_UNIFORMS, &nUniforms);
+  lua_newtable(L);
+  for(GLint i=0;i<nUniforms;++i) {
+    char name[256];
+    GLsizei len;
+    GLint size;
+    GLenum type;
+    glGetActiveUniform(program, i, sizeof(name), &len, &size, &type, name);
+    lua_pushstring(L, name);
+    lua_pushinteger(L, glGetUniformLocation(program, name));
+    lua_settable(L,-3);
+  }
+  return 1; 
+}
+
 static int FClear(lua_State *L) {
   GLbitfield mask = luaL_checkinteger(L, 1);
   glClear(mask);
@@ -333,6 +352,13 @@ static int FClearColor(lua_State *L) {
   glClearColor(r, g, b, a);
   return 0; 
 } 
+
+static int FGetString(lua_State *L) {
+  GLenum name = luaL_checkinteger(L, 1);
+  const GLubyte * str = glGetString(name);
+  lua_pushstring(L, (const char *)str);
+  return 1;
+}
 
 static const luaL_Reg R[] =
 {
@@ -361,6 +387,8 @@ static const luaL_Reg R[] =
     { "Uniform", FUniform },
     { "Clear", FClear },
     { "ClearColor", FClearColor },
+    { "GetString", FGetString },
+    { "ListUniforms", FListUniforms },
     //    { "",  },
     { NULL,     NULL    }
 };

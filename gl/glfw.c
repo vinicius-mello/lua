@@ -237,6 +237,9 @@ static const luaL_IntegerConstant C[] = {
 
  {   "CONNECTED", GLFW_CONNECTED},
  {   "DISCONNECTED", GLFW_DISCONNECTED},
+ {   "FOCUS_ON_SHOW", GLFW_FOCUS_ON_SHOW},
+ { "TRUE", GLFW_TRUE},
+ { "FALSE", GLFW_FALSE},
 
  {   NULL, 0} };
 
@@ -480,7 +483,7 @@ static int FCreateWindow(lua_State *L)
     lua_pushliteral(L,"title");
     lua_pushstring(L,title);
     lua_settable(L,-3);
-    lua_getglobal(L,LIBNAME);
+    luaL_getmetatable(L,LIBTYPE);
     lua_setmetatable(L,-2);
     return 1;
 }
@@ -491,7 +494,7 @@ static int FGetPrimaryMonitor(lua_State *L)
     lua_pushliteral(L,"__ptr__");
     lua_pushlightuserdata(L,glfwGetPrimaryMonitor());
     lua_settable(L,-3);
-    lua_getglobal(L,LIBNAME);
+    luaL_getmetatable(L,LIBTYPE);
     lua_setmetatable(L,-2);
     return 1;
 }
@@ -618,7 +621,7 @@ static int FSetKeyCallback(lua_State *L)
     lua_objinregistry(L,window,1);
     lua_pushliteral(L,"__KeyCallback");
     lua_pushvalue(L,2);
-    lua_settable(L,1);
+    lua_rawset(L,1);
     return 0;
 }
 
@@ -629,7 +632,7 @@ static int FSetWindowPosCallback(lua_State *L)
     lua_objinregistry(L,window,1);
     lua_pushliteral(L,"__WindowPosCallback");
     lua_pushvalue(L,2);
-    lua_settable(L,1);
+    lua_rawset(L,1);
     return 0;
 }
 
@@ -640,7 +643,7 @@ static int FSetWindowSizeCallback(lua_State *L)
     lua_objinregistry(L,window,1);
     lua_pushliteral(L,"__WindowSizeCallback");
     lua_pushvalue(L,2);
-    lua_settable(L,1);
+    lua_rawset(L,1);
     return 0;
 }
 
@@ -651,7 +654,7 @@ static int FSetWindowCloseCallback(lua_State *L)
     lua_objinregistry(L,window,1);
     lua_pushliteral(L,"__WindowCloseCallback");
     lua_pushvalue(L,2);
-    lua_settable(L,1);
+    lua_rawset(L,1);
     return 0;
 }
 
@@ -662,7 +665,7 @@ static int FSetWindowRefreshCallback(lua_State *L)
     lua_objinregistry(L,window,1);
     lua_pushliteral(L,"__WindowRefreshCallback");
     lua_pushvalue(L,2);
-    lua_settable(L,1);
+    lua_rawset(L,1);
     return 0;
 }
 
@@ -673,7 +676,7 @@ static int FSetWindowFocusCallback(lua_State *L)
     lua_objinregistry(L,window,1);
     lua_pushliteral(L,"__WindowFocusCallback");
     lua_pushvalue(L,2);
-    lua_settable(L,1);
+    lua_rawset(L,1);
     return 0;
 }
 
@@ -684,7 +687,7 @@ static int FSetWindowIconifyCallback(lua_State *L)
     lua_objinregistry(L,window,1);
     lua_pushliteral(L,"__WindowIconifyCallback");
     lua_pushvalue(L,2);
-    lua_settable(L,1);
+    lua_rawset(L,1);
     return 0;
 }
 
@@ -695,7 +698,7 @@ static int FSetCharCallback(lua_State *L)
     lua_objinregistry(L,window,1);
     lua_pushliteral(L,"__CharCallback");
     lua_pushvalue(L,2);
-    lua_settable(L,1);
+    lua_rawset(L,1);
     return 0;
 }
 
@@ -706,7 +709,7 @@ static int FSetMouseButtonCallback(lua_State *L)
     lua_objinregistry(L,window,1);
     lua_pushliteral(L,"__MouseButtonCallback");
     lua_pushvalue(L,2);
-    lua_settable(L,1);
+    lua_rawset(L,1);
     return 0;
 }
 
@@ -717,7 +720,7 @@ static int FSetCursorPosCallback(lua_State *L)
     lua_objinregistry(L,window,1);
     lua_pushliteral(L,"__CursorPosCallback");
     lua_pushvalue(L,2);
-    lua_settable(L,1);
+    lua_rawset(L,1);
     return 0;
 }
 
@@ -728,7 +731,7 @@ static int FSetCursorEnterCallback(lua_State *L)
     lua_objinregistry(L,window,1);
     lua_pushliteral(L,"__CursorEnterCallback");
     lua_pushvalue(L,2);
-    lua_settable(L,1);
+    lua_rawset(L,1);
     return 0;
 }
 
@@ -739,7 +742,7 @@ static int FSetScrollCallback(lua_State *L)
     lua_objinregistry(L,window,1);
     lua_pushliteral(L,"__ScrollCallback");
     lua_pushvalue(L,2);
-    lua_settable(L,1);
+    lua_rawset(L,1);
     return 0;
 }
 
@@ -771,7 +774,7 @@ static int FSetFramebufferSizeCallback(lua_State *L)
     lua_objinregistry(L,window,1);
     lua_pushliteral(L,"__FramebufferSizeCallback");
     lua_pushvalue(L,2);
-    lua_settable(L,1);
+    lua_rawset(L,1);
     return 0;
 }
 
@@ -895,7 +898,7 @@ static int FGetMonitors(lua_State *L)
         lua_pushliteral(L,"__ptr__");
         lua_pushlightuserdata(L,monitors[i]);
         lua_settable(L,-3);
-        lua_getglobal(L,LIBNAME);
+        luaL_getmetatable(L,LIBTYPE);
         lua_setmetatable(L,-2);
         lua_settable(L,-3);
     }
@@ -1025,9 +1028,8 @@ static const luaL_Reg R[] =
 
 int luaopen_glfw(lua_State *L)
 {
-
     luaL_newmetatable(L,LIBTYPE);
- 		luaL_setfuncs(L,R,0);
+ 	luaL_setfuncs(L,R,0);
     lua_pushliteral(L,"version");
     lua_pushliteral(L,LIBVERSION);
     lua_settable(L,-3);

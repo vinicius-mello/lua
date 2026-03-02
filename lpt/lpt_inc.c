@@ -880,21 +880,26 @@ void LPT(subdivide_point_cb)(lpt code, void *udata) {
 
 void LPT(tree_subdivide_point)(LPT(tree) *tree, double * point, int level, void (*visit)(lpt,void*), void *udata) {
   lpt_queue * q = lpt_queue_new(256);
-  int flag;
+  lpt_queue * r = lpt_queue_new(256);
+  bool exists_lower;
   do {
+    lpt_queue_reset(q);
+    lpt_queue_reset(r);
     LPT(tree_search_all)(tree, point, LPT(subdivide_point_cb), q);
-    flag = 1;
+    exists_lower = false;
     while(!lpt_queue_empty(q)) {
-      lpt code = {lpt_queue_popleft(q)};
+      lpt code = LPT(frominteger)(lpt_queue_popleft(q));
+      lpt_queue_pushright(r, LPT(tointeger)(code));
       if(LPT(tree_is_leaf)(tree, code)&&LPT(simplex_level)(code) < level) {
         LPT(tree_compat_bisect)(tree, code, NULL, NULL, NULL);
-        flag = 0;
+        exists_lower = true;
       }
     }
-  } while(flag);
-  while(!lpt_queue_empty(q)) {
-    lpt code = {lpt_queue_popleft(q)};
+  } while(exists_lower);
+  while(!lpt_queue_empty(r)) {
+    lpt code = LPT(frominteger)(lpt_queue_popleft(r));
     if(visit) visit(code, udata);
   }
   lpt_queue_free(q);
+  lpt_queue_free(r);
 }

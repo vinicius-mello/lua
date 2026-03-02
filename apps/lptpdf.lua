@@ -46,14 +46,14 @@ end
 
 local x=adia.var(1)
 local y=adia.var(2)
-local f=taubin(x,y)
+local f=circle(x,y)
 
 adia.__call = adia.eval_dual_interval
 
 local t = lpt.tree(1024)
 t:print_stats()
 
-local max_depth = 12
+local max_depth = 14
 
 t:subdivide_until(function(tree, code)
   local Ix, Iy = bb(code)
@@ -380,7 +380,7 @@ for l=1,#inside_triangle do
   local j = idxs:get(r,2)
   local k = idxs:get(r,3)
   inside_idx[#inside_idx+1] = {i,j,k}
-endcode
+end
 
 function ply_o.vertex_write_cb(i)
 --	x = string.format("%.8f", x)

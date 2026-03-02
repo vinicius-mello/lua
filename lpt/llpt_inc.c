@@ -116,7 +116,7 @@ static int Ftostring(lua_State *L) {
 
 static int Fid(lua_State *L) {
   lpt *r = luaL_checkudata(L, 1, CODE);
-  lua_pushlightuserdata(L, (void *)r);
+  lua_pushlightuserdata(L, (void *)LPT(tointeger)(*r));
   return 1;
 }
 
@@ -317,7 +317,7 @@ static const luaL_Reg R[] =
     { "print_stats", Ftree_print_stats },
     { "vertex_count", Ftree_vertex_count },
     { "leaf_count", Ftree_leaf_count },
-    { "ids", Ftree_cell_ids },
+    { "vertex_ids", Ftree_cell_ids },
     { "emit_idxs", Ftree_emit_idxs },
     { "vertex_emit_coords", Ftree_vertex_emit_coords },
     { "subdivide_until", Ftree_subdivide_until },

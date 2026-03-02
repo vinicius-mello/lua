@@ -28,6 +28,7 @@ typedef struct cg_data_ {
   int irest; 
   int method; 
   int finish;
+  size_t max_iterations;
 } cg_data;
 
 typedef unsigned int uint;
@@ -65,6 +66,9 @@ static int Fnew(lua_State *L) {
     lua_getfield(L,1,"irest");
     data->irest = luaL_optinteger(L,-1,1);
     lua_pop(L,1);
+    lua_getfield(L,1,"max_iterations");
+    data->max_iterations = luaL_optinteger(L,-1,100000);
+    lua_pop(L,1);
     data->finish = 0;
     data->f = 0.0;
     data->iflag = 0;
@@ -87,6 +91,8 @@ static int clone_array(lua_State *L, array * a) {
 
 static int Fminimize(lua_State *L) {
   cg_data * data = (cg_data *)luaL_checkudata(L,1,"cg");
+  int new_x = lua_isfunction(L,3);
+  if(new_x) lua_pushvalue(L,2);
   clone_array(L, data->x);
   clone_array(L, data->g);
   lua_pushvalue(L,-3);
@@ -95,7 +101,7 @@ static int Fminimize(lua_State *L) {
   lua_call(L,2,1);
   data->f = lua_tonumber(L,-1);
   lua_pop(L,1);
-  for(size_t icall=0;icall<100000;++icall) {
+  for(size_t icall=0;icall<data->max_iterations;++icall) {
     cgfam_(&data->n, (double*)data->x->ptr, &data->f, (double*)data->g->ptr, data->d, data->gold,
       data->iprint, &data->eps, data->w, &data->iflag, &data->irest,
       &data->method, &data->finish);
@@ -110,6 +116,18 @@ static int Fminimize(lua_State *L) {
       data->f = lua_tonumber(L,-1);
       lua_pop(L,1);
     } else if(iflag == 2) {
+      if(new_x) {
+        lua_pushvalue(L,3);
+        lua_pushvalue(L,-3);
+        lua_pushvalue(L,-3);
+        lua_call(L,2,1);
+        int finished = lua_toboolean(L,-1);
+        lua_pop(L,1);
+        if(finished) {
+          data->finish = 1;
+          break;
+        }
+      }
       double tlev = data->eps*(1.0+fabs(data->f));
       data->finish = 1;
       for(int i=0;i<data->n;++i) {
@@ -119,10 +137,12 @@ static int Fminimize(lua_State *L) {
         }
       }
     } else {
+      data->f = NAN;
       break;
       //return luaL_error(L, "cg.minimize: cgfam_ returned with iflag=%d", data->iflag);
     }
-  } 
+  }
+  data->finish = 0;
   lua_pushnumber(L,data->f);
   return 1;
 }

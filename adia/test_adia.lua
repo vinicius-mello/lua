@@ -31,13 +31,13 @@ local f = x^2+3*x*y+y^2-1
 adia.print(f)
 print("Testing evaluation...")
 print("f(a,b)=",f(a,b))
-adia.__call = adia.eval_d
+adia.__call = adia.eval_dual
 v,grad = f(a, b)
 print("f(a,b)=",v)
 print("grad f(a,b)=(",grad[1], grad[2], ")")
-adia.__call = adia.eval_i
+adia.__call = adia.eval_interval
 print("f(ai,bi)=",f(ai,bi))
-adia.__call = adia.eval_di
+adia.__call = adia.eval_dual_interval
 v,grad = f(ai, bi)
 print("f(ai,bi)=",v)
 print("grad f(ai,bi)=(",grad[1], grad[2], ")")

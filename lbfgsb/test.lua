@@ -49,6 +49,12 @@ function fg(x,g)
   return f
 end
 
-opt:minimize(fg)
+function new_x(x)
+  print("Current x:")
+  print(x)
+  return false -- true if finished, false to continue
+end
+
+opt:minimize(fg--[[, new_x]])
 
 print(x)

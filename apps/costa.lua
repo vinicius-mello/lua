@@ -1,11 +1,11 @@
 package.cpath = "../libs/?.so;" .. package.cpath
 package.path = "../libs/?.lua;" .. package.path
 
-complex = require("complex")
-weierstrass = require("weierstrass")
-lpt = require("lpt2")
-array = require("array")
-ply = require("ply")
+local complex = require("complex")
+local weierstrass = require("weierstrass")
+local lpt = require("lpt2")
+local array = require("array")
+local ply = require("ply")
 
 local t = lpt.tree(1024)
 
@@ -27,9 +27,9 @@ local poles = array.double { rows = 8, cols = 2,
 	 1,  1
 }
 
-local pt = array.double {rows = 2}
-
+local pt = array.double {rows = 2, cols = 1}
 local nb_infinity = {}
+
 for i=1,poles:rows() do
 	pt:set(1, poles:get(i,1))
 	pt:set(2, poles:get(i,2))
@@ -37,7 +37,7 @@ for i=1,poles:rows() do
 	for j=1,#v do
 		nb_infinity[v[j]:id()] = true
 	end
-end
+end 
 
 function tablelength(T)
   local count = 0
@@ -45,25 +45,34 @@ function tablelength(T)
   return count
 end
 
-local vtx = t:vertex_emit_coords()
-local idx = array.uint { rows = t:leaf_count()-tablelength(nb_infinity), cols = 3 }
+local vtx = array.double { rows= t:vertex_count(), cols = lpt.DIM }
+t:vertex_emit_coords(vtx)
+local n_triangles = t:leaf_count()-tablelength(nb_infinity)
+local idx = array.uint { rows = n_triangles, cols = lpt.DIM+1 }
+--t:emit_idxs(idx, true)
 
-local ii = 0
+local ii = 1
 t:visit_leafs(function(tree, leaf)
-	if nb_infinity[leaf:id()] then return end
-	local v = tree:leaf_vertex_ids(leaf)
+	if nb_infinity[leaf:id()] then
+		return
+	end
+	local v = tree:vertex_ids(leaf)
+	if leaf:orientation()<0 then 
+		v[2], v[3] = v[3], v[2]
+	end
 	idx:set(ii, 1, v[1])
 	idx:set(ii, 2, v[2])
 	idx:set(ii, 3, v[3])
 	ii = ii + 1
 end)
 
+
 ply_o = {
 	format = "ascii",
 	"vertex",
 	"face",
 	vertex = {
-		size = #vtx,
+		size = vtx:rows(),
 		"x", 
 		"y",
 		"z",
@@ -71,7 +80,7 @@ ply_o = {
 		y = "float",
 		z = "float",
 	},
-	face = { size = #idx,
+	face = { size = idx:rows(),
 		"vertex_indices",
 		vertex_indices = "list uchar int"
 	}
@@ -98,10 +107,11 @@ function costa(u, v)
 end
 
 function ply_o.vertex_write_cb(i)
-	local u = vtx[i+1][1]
-	local v = vtx[i+1][2]
+	local u = vtx:get(i+1,1)
+	local v = vtx:get(i+1,2)
+	u = (0.5*u+0.5) % 1
+	v = (0.5*v+0.5) % 1
 	local x,y,z = costa(u,v)
-	--local x,y,z = u, v, 0
 	x = string.format("%.8f", x)
 	y = string.format("%.8f", y)
 	z = string.format("%.8f", z)
@@ -112,12 +122,15 @@ function ply_o.vertex_write_cb(i)
 	}
 end
 
-function ply_o.face_write_cb(i)
+function ply_o.face_write_cb(id)
+	local i = idx:get(id+1,1)
+	local j = idx:get(id+1,2)
+	local k = idx:get(id+1,3)
 	return {
-		vertex_indices = idx[i+1]
+		vertex_indices = {i, j, k}
 	}
 end
 
-ply.create("teste.ply", ply_o)
+ply.create("costa.ply", ply_o)
 
 ply_o:write_data()

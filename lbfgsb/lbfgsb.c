@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <math.h>
 #define LIBNAME  "lbfgsb"
 #define LIBTYPE "lbfgsb"
 #define LIBVERSION "1"
@@ -39,9 +40,21 @@ typedef struct lbfgsb_data_ {
   int_least32_t lsave[4];
   int isave[44];
   double dsave[29];
+  size_t max_iterations;
 } lbfgsb_data;
 
 typedef unsigned int uint;
+
+static void set_start(char * task) {
+  task[0] = 'S';
+  task[1] = 'T';
+  task[2] = 'A';
+  task[3] = 'R';
+  task[4] = 'T';
+  for(size_t i=5;i<60;++i) {
+    task[i] = ' ';
+  }
+}
 
 static int Fnew(lua_State *L) {
   if(lua_istable(L,1)) {
@@ -91,14 +104,10 @@ static int Fnew(lua_State *L) {
     lua_getfield(L,1,"pgtol");
     data->pgtol = luaL_optnumber(L,-1,1e-5);
     lua_pop(L,1);
-    data->task[0] = 'S';
-    data->task[1] = 'T';
-    data->task[2] = 'A';
-    data->task[3] = 'R';
-    data->task[4] = 'T';
-    for(size_t i=5;i<60;++i) {
-      data->task[i] = ' ';
-    }
+    lua_getfield(L,1,"max_iterations");
+    data->max_iterations = luaL_optinteger(L,-1,100000);
+    lua_pop(L,1);
+    set_start(data->task);
   } else {
     return luaL_error(L, "lbfgsb.new: expected table with x and g fields");
   }
@@ -118,9 +127,11 @@ static int clone_array(lua_State *L, array * a) {
 
 static int Fminimize(lua_State *L) {
   lbfgsb_data * data = (lbfgsb_data *)luaL_checkudata(L,1,"lbfgsb");
+  int new_x = lua_isfunction(L,3);
+  if(new_x) lua_pushvalue(L,2);
   clone_array(L, data->x);
   clone_array(L, data->g);
-  for(size_t icall=0;icall<100000;++icall) {
+  for(size_t icall=0;icall<data->max_iterations;++icall) {
     setulb_(&data->n, &data->m, (double*)data->x->ptr,
       (double*)data->lower->ptr, (double*)data->upper->ptr, (int*)data->nbd->ptr,
       &data->f, (double*)data->g->ptr, 
@@ -129,7 +140,17 @@ static int Fminimize(lua_State *L) {
       data->task, &data->iprint, 
       data->csave, data->lsave, data->isave, data->dsave,
       sizeof(data->task), sizeof(data->csave));
-    if(strncmp(data->task,"NEW_X",5) == 0) {
+    if(strncmp(data->task,"NEW_X",5) == 0 && new_x) {
+      lua_pushvalue(L,3);
+      lua_pushvalue(L,-3);
+      lua_pushvalue(L,-3);
+      lua_call(L,2,1);
+      int finished = lua_toboolean(L,-1);
+      lua_pop(L,1);
+      if(finished) {
+        set_start(data->task);
+        break;
+      }
     } else if(strncmp(data->task,"FG",2) == 0) {
       lua_pushvalue(L,-3);
       lua_pushvalue(L,-3);
@@ -138,17 +159,11 @@ static int Fminimize(lua_State *L) {
       data->f = lua_tonumber(L,-1);
       lua_pop(L,1);
     } else if(strncmp(data->task,"CONV",4) == 0 || strncmp(data->task,"ABNO",4) == 0 || strncmp(data->task,"ERROR",5) == 0) {
+      data->f = NAN;
       break;
     }
   }
-  data->task[0] = 'S';
-  data->task[1] = 'T';
-  data->task[2] = 'A';
-  data->task[3] = 'R';
-  data->task[4] = 'T';
-  for(size_t i=5;i<60;++i) {
-    data->task[i] = ' ';
-  }
+  set_start(data->task);
   lua_pushnumber(L,data->f);
   return 1;
 }

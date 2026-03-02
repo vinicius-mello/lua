@@ -193,6 +193,45 @@ CONSTELT(double)
 
 #undef CONSTELT
 
+static int Fget_row(lua_State *L) {
+	array * a = luaL_checkudata(L,1,MYTYPE);
+	size_t i = luaL_checkint(L,2);
+	array * d = luaL_checkudata(L,3,MYTYPE);
+	for(size_t j=1;j<=a->cols;++j) {
+		array_get(L, a, i, j);
+		array_set(L, d, j, 1, lua_tonumber(L, -1));
+		lua_pop(L, 1);
+	}
+	return 1;
+}
+
+static int Fset_row(lua_State *L) {
+	array * a = luaL_checkudata(L,1,MYTYPE);
+	size_t i = luaL_checkint(L,2);
+	array * d = luaL_checkudata(L,3,MYTYPE);
+	for(size_t j=1;j<=a->cols;++j) {
+		array_get(L, d, j, 1);
+		array_set(L, a, i, j, lua_tonumber(L, -1));
+		lua_pop(L, 1);
+	}
+	return 1;
+}	
+
+static int Fadd_to_row(lua_State *L) {
+	array * a = luaL_checkudata(L,1,MYTYPE);
+	size_t i = luaL_checkint(L,2);
+	array * d = luaL_checkudata(L,3,MYTYPE);
+	for(size_t j=1;j<=a->cols;++j) {
+		array_get(L, a, i, j);
+		lua_Number v = lua_tonumber(L, -1);
+		lua_pop(L, 1);
+		array_get(L, d, j, 1);
+		v += lua_tonumber(L, -1);
+		lua_pop(L, 1);
+		array_set(L, a, i, j, v);
+	}
+	return 1;
+}
 
 static int Fget(lua_State *L) {
 	array * a = luaL_checkudata(L,1,MYTYPE);
@@ -350,6 +389,47 @@ static int Fadd_to(lua_State *L) {
 	return 1;
 }
 
+static int Fprod_to(lua_State *L) {
+	array * a = luaL_checkudata(L,1,MYTYPE);
+	array * b = luaL_checkudata(L,2,MYTYPE);
+	if(a->cols != b->cols || a->rows != b->rows || a->entry_type != b->entry_type) {
+		return luaL_error(L, "array:prod_to: incompatible arrays");
+	}
+	if(a->entry_type == et_float) {
+		for(size_t i=0;i<a->cols*a->rows;++i) {
+			((float *)a->ptr)[i] *= ((float *)b->ptr)[i];
+		}
+	} else if(a->entry_type == et_double) {
+		for(size_t i=0;i<a->cols*a->rows;++i) {
+			((double *)a->ptr)[i] *= ((double *)b->ptr)[i];
+		}
+	} else {
+		return luaL_error(L, "array:prod_to: unsupported entry type for prod_to");
+	}
+	lua_pushvalue(L, 1);
+	return 1;
+}
+
+static int Fscale(lua_State *L) {
+	array * a = luaL_checkudata(L,1,MYTYPE);
+	double b = luaL_checknumber(L,2);
+	
+	if(a->entry_type == et_float) {
+		for(size_t i=0;i<a->cols*a->rows;++i) {
+			((float *)a->ptr)[i] *= (float) b;
+		}
+	} else if(a->entry_type == et_double) {
+		for(size_t i=0;i<a->cols*a->rows;++i) {
+			((double *)a->ptr)[i] *= (double) b;
+		}
+	} else {
+		return luaL_error(L, "array:scale: unsupported entry type for scale");
+	}
+	lua_pushvalue(L, 1);
+	return 1;
+}
+
+
 static int Fadd(lua_State *L) {
 	array * a = luaL_checkudata(L,1,MYTYPE);
 	array * b = luaL_checkudata(L,2,MYTYPE);
@@ -407,6 +487,32 @@ static int Fsub(lua_State *L) {
 	} else {
 		return luaL_error(L, "array:sub: unsupported entry type for sub");
 	}
+	return 1;
+}
+
+static int Fdot(lua_State *L) {
+	array * a = luaL_checkudata(L,1,MYTYPE);
+	array * b = luaL_checkudata(L,2,MYTYPE);
+	if(a->cols != b->cols || a->rows != b->rows || a->entry_type != b->entry_type) {
+		return luaL_error(L, "array:dot: incompatible arrays");
+	}
+	double result;
+	if(a->entry_type == et_float) {
+		result = cblas_sdot(
+			a->cols*a->rows,
+			(float *)a->ptr, 1,
+			(float *)b->ptr, 1
+		);
+	} else if(a->entry_type == et_double) {
+		result = cblas_ddot(
+			a->cols*a->rows,
+			(double *)a->ptr, 1,
+			(double *)b->ptr, 1
+		);
+	} else {
+		return luaL_error(L, "array:dot: unsupported entry type for dot");
+	}
+	lua_pushnumber(L, result);
 	return 1;
 }
 
@@ -711,6 +817,9 @@ static const luaL_Reg R[] =
 	{ "double",	Ldouble},
 	{ "rows",	Frows},
 	{ "cols",	Fcols},
+	{ "get_row",	Fget_row},
+	{ "set_row",	Fset_row},
+	{ "add_to_row",	Fadd_to_row},
 	{ "get",	Fget},
 	{ "set",	Fset},
 	{ "add_to_entry",	Fadd_to_entry},
@@ -722,7 +831,10 @@ static const luaL_Reg R[] =
 	{ "zero",	Fzero},
 	{ "set_all",	Fset_all},
 	{ "add_to",	Fadd_to},
+	{ "prod_to",	Fprod_to},
+	{ "scale",	Fscale},
 	{ "add",	Fadd},
+	{ "dot",	Fdot},
 	{ "__add", Fadd},
 	{ "sub",	Fsub},
 	{ "__sub", Fsub},

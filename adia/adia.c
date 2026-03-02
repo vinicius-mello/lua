@@ -401,6 +401,15 @@ void dual_number_div(int nvars, double *a, double *b, double *c) {
   }
 }
 
+void dual_number_pow(int nvars, double *a, double *b, double *c) {
+  double t = pow(a[0], b[0]-1.0);
+  c[0] = a[0]*t;
+  t = t * b[0];
+  for(int i=1;i<=nvars;++i) {
+    c[i] = t*a[i]/* + t*log(a[0])*b[i]*/;
+  }
+}
+
 void dual_number_ipow(int nvars, double *a, int b, double *c) {
   double t = q_ipow(a[0], b-1);
   c[0] = a[0]*t;
@@ -484,7 +493,7 @@ static int Feval_d(lua_State * L) {
         case rpn_sub: dual_number_sub(nvars, stack[sp-2], stack[sp-1], temp); sp--; break;
         case rpn_mul: dual_number_mul(nvars, stack[sp-2], stack[sp-1], temp); sp--; break;
         case rpn_div: dual_number_div(nvars, stack[sp-2], stack[sp-1], temp); sp--; break;
-        case rpn_pow: dual_number_ipow(nvars, stack[sp-2], (int)stack[sp-1][0], temp); sp--; break;
+        case rpn_pow: dual_number_pow(nvars, stack[sp-2], stack[sp-1], temp); sp--; break;
         case rpn_sin: dual_number_sin(nvars, stack[sp-1], temp); break;
         case rpn_cos: dual_number_cos(nvars, stack[sp-1], temp); break;
         case rpn_tan: dual_number_tan(nvars, stack[sp-1], temp); break; 
@@ -537,7 +546,7 @@ static int Feval_darray(lua_State * L) {
         case rpn_sub: dual_number_sub(nvars, stack[sp-2], stack[sp-1], temp); sp--; break;
         case rpn_mul: dual_number_mul(nvars, stack[sp-2], stack[sp-1], temp); sp--; break;
         case rpn_div: dual_number_div(nvars, stack[sp-2], stack[sp-1], temp); sp--; break;
-        case rpn_pow: dual_number_ipow(nvars, stack[sp-2], (int)stack[sp-1][0], temp); sp--; break;
+        case rpn_pow: dual_number_pow(nvars, stack[sp-2], stack[sp-1], temp); sp--; break;
         case rpn_sin: dual_number_sin(nvars, stack[sp-1], temp); break;
         case rpn_cos: dual_number_cos(nvars, stack[sp-1], temp); break;
         case rpn_tan: dual_number_tan(nvars, stack[sp-1], temp); break; 

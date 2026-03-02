@@ -1,7 +1,7 @@
 include ../make.inc
 
 MYCFLAGS= $(CFLAGS) -I$(LUA_INCDIR) 
-INTERVAL_LIB = -I fi_lib -l:fi_lib.a -L fi_lib
+INTERVAL_LIB = -I fi_lib -l:fi_lib.a -L fi_lib -lm
 
 adia.so: adia.c
 	$(CC) $(MYCFLAGS) -o $@ $(SHARED) $< $(INTERVAL_LIB) 

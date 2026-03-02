@@ -3,6 +3,8 @@ package.path = "../libs/?.lua;" .. package.path
 
 local ply = require("ply")
 local array = require("array")
+local lbfgsb = require("lbfgsb")
+local adia = require("adia")
 
 local max = math.max
 local min = math.min
@@ -10,26 +12,31 @@ local abs = math.abs
 local sqrt = math.sqrt
 
 
-print("Lendo header do arquivo ply")
+print("Reading mesh")
 local filename=arg[1]
 local mesh=ply.load(filename)
 mesh:print_header()
 
-local x = array.float { rows = mesh.vertex.size }
-local y = array.float { rows = mesh.vertex.size }
-local z = array.float { rows = mesh.vertex.size }
-local t = array.float { rows = mesh.vertex.size }
-local bdr = array.float { rows = mesh.vertex.size }
-local gradF = array.float { rows = mesh.vertex.size }
-local gradG = array.float { rows = mesh.vertex.size }
+local x = array.double { rows = mesh.vertex.size }
+local y = array.double { rows = mesh.vertex.size }
+local z = array.double { rows = mesh.vertex.size }
+
+local bdr = array.double { rows = mesh.vertex.size }
+local gradF = array.double { rows = mesh.vertex.size }
+local gradG = array.double { rows = mesh.vertex.size }
 local idx = array.uint { rows = mesh.face.size, cols = 3 }
 local edges = {}
+
+x:zero()
+y:zero()
+z:zero()
 
 function mesh.vertex_read_cb(i,reg)
     x:set(i+1, reg.x)
     y:set(i+1, reg.y)
-    z:set(i+1, reg.z)
+    z:set(i+1, 0)
 end
+
 
 function mesh.face_read_cb(i,reg)
 	local vert = reg.vertex_indices
@@ -53,16 +60,19 @@ function mesh.face_read_cb(i,reg)
 	insert_edge(2,3)
 end
 
-print("Processando arquivo ply")
+print("Processing PLY file")
 bdr:set_all(1)
 mesh:read_data()
+
 for k,e in pairs(edges) do
-	print(e.faces, e.va, e.vb)
 	if e.faces == 1 then
 		bdr:set(e.va+1, 0)
 		bdr:set(e.vb+1, 0)
 	end
 end
+
+z:prod_to(bdr)
+
 
 function sArea(xi,yi,xj,yj,xk,yk)
 	 -- 1 | 1  1  1  |
@@ -71,64 +81,137 @@ function sArea(xi,yi,xj,yj,xk,yk)
 	 return 0.5*(xj*yk-xk*yj-xi*yk+xk*yi+xi*yj-xj*yi)
 end
 
-function coords(i) 
-	return x:get(i+1), y:get(i+1), z:get(i+1)
+function projected_area() 
+	local s = 0
+	for l=1, mesh.face.size do
+		local i,j,k = idx:get(l,1)+1, idx:get(l,2)+1, idx:get(l,3)+1
+		local xi,yi = x:get(i), y:get(i)
+		local xj,yj = x:get(j), y:get(j)
+		local xk,yk = x:get(k), y:get(k)
+		s = s + sArea(xi,yi,xj,yj,xk,yk)
+	end
+	return s
 end
 
-function triData(i,j,k)
-	local xi,yi,zi = coords(i)
-	local xj,yj,zj = coords(j)
-	local xk,yk,zk = coords(k)
+print("Projected area=", projected_area())
+
+local mu = 0.78
+
+local lower = array.double { rows = mesh.vertex.size }
+local upper = array.double { rows = mesh.vertex.size }
+local nbd = array.int { rows=mesh.vertex.size }
+
+for i=1, mesh.vertex.size do
+	lower:set(i, 0)
+	upper:set(i, mu)
+	nbd:set(i, 3) -- only upper bound
+end
+
+local opt = lbfgsb.new {
+  x = z,
+  g = gradG,
+  lower = lower,
+  upper = upper,
+  nbd = nbd,
+	pgtol = 1e-6,
+  m = 7,
+  iprint = 0
+}
+
+local vxi, vyi, vzi = adia.var(1), adia.var(2), adia.var(3)
+local vxj, vyj, vzj = adia.var(4), adia.var(5), adia.var(6)
+local vxk, vyk, vzk = adia.var(7), adia.var(8), adia.var(9)
+
+function triangle_area(xi,yi,zi,xj,yj,zj,xk,yk,zk)
 	local xy = sArea(xi,yi,xj,yj,xk,yk)
 	local yz = sArea(yi,zi,yj,zj,yk,zk)
 	local zx = sArea(zi,xi,zj,xj,zk,xk)
-	local A = sqrt(xy*xy+yz*yz+zx*zx)
-	local dzi = 1/(2*A)*(yz*(yk-yj) + zx*(xj-xk)) 
-	local dzj = 1/(2*A)*(yz*(yi-yk) + zx*(xk-xi)) 
-	local dzk = 1/(2*A)*(yz*(yj-yi) + zx*(xi-xj)) 
-	return A,zi,zj,zk,dzi,dzj,dzk
+	return (xy^2+yz^2+zx^2)^0.5
 end
 
-function compAll()
+local triangle_area_ad = triangle_area(vxi,vyi,vzi,vxj,vyj,vzj,vxk,vyk,vzk)
+local barycenter_ad = 1/3*(vzi+vzj+vzk)*triangle_area_ad
+local objective_ad = (mu-1/3*(vzi+vzj+vzk))*triangle_area_ad
+
+adia.__call = adia.eval_dual
+
+--[[
+function fg_area_sq(zz,g)
 	local s = 0
-	local a = 0
-
-	gradF:set_all(0)
-	gradG:set_all(0)
-	for l=0, mesh.face.size-1 do
-		local i,j,k = idx:get(l+1,1), 
-			idx:get(l+1,2), idx:get(l+1,3)
-		local A,zi,zj,zk,dzi,dzj,dzk = triData(i,j,k)
-		s = s + (zi+zj+zk)*A
-		a = a + A
-		local bdi = bdr:get(i+1)
-		local bdj = bdr:get(j+1)
-		local bdk = bdr:get(k+1)
-		if bdr:get(i+1)==1 then
-		  gradF:add_to_entry(i+1, 1/3*(A+(zi+zj+zk)*dzi))
-			gradG:add_to_entry(i+1, dzi)
-		end
-		if bdr:get(j+1)==1 then 
-			gradF:add_to_entry(j+1, 1/3*(A+(zi+zj+zk)*dzj))
-			gradG:add_to_entry(j+1, dzj)
-		end
-		if bdr:get(k+1)==1 then 
-			gradF:add_to_entry(k+1, 1/3*(A+(zi+zj+zk)*dzk))
-			gradG:add_to_entry(k+1, dzk)
-		end
+	g:zero()
+	for l=1, mesh.face.size do
+		local i,j,k = idx:get(l,1)+1, idx:get(l,2)+1, idx:get(l,3)+1
+		local xi,yi,zi = x:get(i), y:get(i), zz:get(i)
+		local xj,yj,zj = x:get(j), y:get(j), zz:get(j)
+		local xk,yk,zk = x:get(k), y:get(k), zz:get(k)
+		local f,grad = triangle_area_ad(xi,yi,zi,xj,yj,zj,xk,yk,zk)
+		s = s + f
+		g:add_to_entry(i, grad[3])
+		g:add_to_entry(j, grad[6])
+		g:add_to_entry(k, grad[9])
 	end
-	return 1/3*s,a
+	g:prod_to(bdr)
+	g:scale(2*(s-s0))
+	return (s-s0)^2
 end
 
-local f,A0 = compAll()
-local A = A0
-for i=1,50000 do
-	z:add_to(0.0001, gradF)
-	z:add_to(-0.0001*(A-A0), gradG)
-  f,A = compAll()
-	if i%1000 == 0 then print(f,A) end
-end 
+function fg_area(zz,g)
+	local s = 0
+	g:zero()
+	for l=1, mesh.face.size do
+		local i,j,k = idx:get(l,1)+1, idx:get(l,2)+1, idx:get(l,3)+1
+		local xi,yi,zi = x:get(i), y:get(i), zz:get(i)
+		local xj,yj,zj = x:get(j), y:get(j), zz:get(j)
+		local xk,yk,zk = x:get(k), y:get(k), zz:get(k)
+		local f,grad = triangle_area_ad(xi,yi,zi,xj,yj,zj,xk,yk,zk)
+		s = s + f
+		g:add_to_entry(i, grad[3])
+		g:add_to_entry(j, grad[6])
+		g:add_to_entry(k, grad[9])
+	end
+	g:prod_to(bdr)
+	return s
+end
 
+function fg_barycenter(zz,g)
+	local s = 0
+	g:zero()
+	for l=1, mesh.face.size do
+		local i,j,k = idx:get(l,1)+1, idx:get(l,2)+1, idx:get(l,3)+1
+		local xi,yi,zi = x:get(i), y:get(i), zz:get(i)
+		local xj,yj,zj = x:get(j), y:get(j), zz:get(j)
+		local xk,yk,zk = x:get(k), y:get(k), zz:get(k)
+		local f,grad = barycenter_ad(xi,yi,zi,xj,yj,zj,xk,yk,zk)
+		s = s + f
+		g:add_to_entry(i, grad[3])
+		g:add_to_entry(j, grad[6])
+		g:add_to_entry(k, grad[9])
+	end
+	g:prod_to(bdr)
+	g:scale(1/s0)
+	return s/s0
+end
+]]
+
+function fg(zz,g)
+	local s = 0
+	g:zero()
+	for l=1, mesh.face.size do
+		local i,j,k = idx:get(l,1)+1, idx:get(l,2)+1, idx:get(l,3)+1
+		local xi,yi,zi = x:get(i), y:get(i), zz:get(i)
+		local xj,yj,zj = x:get(j), y:get(j), zz:get(j)
+		local xk,yk,zk = x:get(k), y:get(k), zz:get(k)
+		local f,grad = objective_ad(xi,yi,zi,xj,yj,zj,xk,yk,zk)
+		s = s + f
+		g:add_to_entry(i, grad[3])
+		g:add_to_entry(j, grad[6])
+		g:add_to_entry(k, grad[9])
+	end
+	g:prod_to(bdr)
+	return s
+end
+
+opt:minimize(fg)
 
 ply_o = {
 	format = "ascii",
@@ -159,14 +242,14 @@ function ply_o.vertex_write_cb(i)
 	return { x=xc, y=yc, z=zc}
 end
 
-function ply_o.face_write_cb(i)
-	local i,j,k = idx:get(i+1,1), idx:get(i+1,2), idx:get(i+1,3)
+function ply_o.face_write_cb(id)
+	local i,j,k = idx:get(id+1,1), idx:get(id+1,2), idx:get(id+1,3)
 	return {
 		vertex_indices = {i, j, k}
 	}
 end
 
-ply.create("out.ply", ply_o)
+ply.create("catenary.ply", ply_o)
 
 ply_o:write_data()
 

@@ -41,3 +41,7 @@ end
 print(y[2])
 y[2] = 5
 print(y[2])
+
+C = array.float { rows = 2, cols=3, 1,2,3,4,5,6}
+print(C)
+print(C:transpose())

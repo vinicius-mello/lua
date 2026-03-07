@@ -52,6 +52,14 @@ static const luaL_IntegerConstant C[] = {
  {  "DEPTH_BUFFER_BIT", GL_DEPTH_BUFFER_BIT},
  {  "STENCIL_BUFFER_BIT", GL_STENCIL_BUFFER_BIT},
  {  "VERSION", GL_VERSION},
+ {  "CULL_FACE", GL_CULL_FACE},
+ { "FRONT", GL_FRONT},
+ {  "BACK", GL_BACK},
+ {  "FRONT_AND_BACK", GL_FRONT_AND_BACK},
+ {  "POLYGON_MODE", GL_POLYGON_MODE},
+ {  "POINTS", GL_POINTS},
+ {  "FILL", GL_FILL},
+ {  "LINE", GL_LINE},
  {   NULL, 0} };
 
 static int FInit(lua_State *L) {
@@ -62,6 +70,25 @@ static int FInit(lua_State *L) {
     fprintf(stderr, "Error: %s\n", glewGetErrorString(err));
   }
   fprintf(stdout, "Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
+  return 0;
+}
+
+static int Fenable(lua_State *L) {
+  uint cap = luaL_checkinteger(L, 1);
+  glEnable(cap);
+  return 0;
+}
+
+static int FpolygonMode(lua_State *L) {
+  uint face = luaL_checkinteger(L, 1);
+  uint mode = luaL_checkinteger(L, 2);
+  glPolygonMode(face, mode);
+  return 0;
+}
+
+static int Fdisable(lua_State *L) {
+  uint cap = luaL_checkinteger(L, 1);
+  glDisable(cap);
   return 0;
 }
 
@@ -86,6 +113,14 @@ static int FBufferData(lua_State *L) {
 	glBufferData(type, data->cols * data->rows * data->sizeof_entry, data->ptr, change);
 	return 0;
 }	
+
+static int FBufferSubData(lua_State *L) {
+  uint type = luaL_checkinteger(L, 1);
+  uint offset = luaL_checkinteger(L, 2);
+  array * data = luaL_checkudata(L, 3, "array");
+  glBufferSubData(type, offset, data->cols * data->rows * data->sizeof_entry, data->ptr);
+  return 0;
+}
 
 static int FVertexAttribArray(lua_State *L) {
 	uint va = luaL_checkinteger(L, 1);
@@ -191,7 +226,7 @@ static int FShaderSource(lua_State *L) {
 static int FCompileShader(lua_State *L) {
   uint shader = luaL_checkinteger(L, 1);
   glCompileShader(shader);
-  return 0; 
+  return 0;
 }
 
 static int FGetShaderInfoLog(lua_State *L) {
@@ -288,10 +323,10 @@ static int FUniform(lua_State *L) {
           glUniform4fv(location, a->cols, (float *)a->ptr);
           return 0; 
         case 9:
-          glUniformMatrix3fv(location, a->cols / 3, GL_FALSE, (float *)a->ptr);
+          glUniformMatrix3fv(location, a->rows / 3, GL_TRUE, (float *)a->ptr);
           return 0;
         case 16:
-          glUniformMatrix4fv(location, a->cols / 4, GL_FALSE, (float *)a->ptr);
+          glUniformMatrix4fv(location, a->rows / 4, GL_TRUE , (float *)a->ptr);
           return 0;
         default:
           return luaL_error(L, "Uniform: unsupported array size for float");
@@ -363,6 +398,8 @@ static int FGetString(lua_State *L) {
 static const luaL_Reg R[] =
 {
     { "Init", FInit },
+    { "Enable", Fenable },
+    { "Disable", Fdisable },
     { "GenBuffer", FGenBuffer },
     { "BindBuffer", FBindBuffer },
     { "BufferData", FBufferData },
@@ -389,6 +426,8 @@ static const luaL_Reg R[] =
     { "ClearColor", FClearColor },
     { "GetString", FGetString },
     { "ListUniforms", FListUniforms },
+    { "BufferSubData", FBufferSubData},
+    { "PolygonMode", FpolygonMode},
     //    { "",  },
     { NULL,     NULL    }
 };

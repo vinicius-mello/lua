@@ -805,6 +805,32 @@ static int Fnewindex(lua_State *L) {
 	return 1;
 }
 
+static int Ftranspose(lua_State *L) {
+	array * a = luaL_checkudata(L,1,MYTYPE);
+	Pnew(L, a->cols, a->rows, a->entry_type);
+	array * t = luaL_checkudata(L,-1,MYTYPE);
+	if(a->entry_type == et_float) {
+		cblas_somatcopy(
+			CblasRowMajor, CblasTrans,
+			a->rows, a->cols,
+			1.0,
+			(float *)a->ptr, a->cols,
+			(float *)t->ptr, t->cols
+		);
+	} else if(a->entry_type == et_double) {
+		cblas_domatcopy(
+			CblasRowMajor, CblasTrans,
+			a->rows, a->cols,
+			1.0,
+			(double *)a->ptr, a->cols,
+			(double *)t->ptr, t->cols
+		);
+	} else {
+		return luaL_error(L, "array:transpose: unsupported entry type for transpose");	
+	}
+	return 1;
+}
+
 static const luaL_Reg R[] =
 {
 	{ "int",	Lint},
@@ -847,6 +873,7 @@ static const luaL_Reg R[] =
 	{ "LU_factor",	FLU_factor},
 	{ "LU_solve",	FLU_solve},
 	{ "__call", Fget},
+	{ "transpose", Ftranspose},
 	{ NULL,		NULL	}
 };
 

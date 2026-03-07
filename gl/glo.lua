@@ -35,6 +35,7 @@ program.__newindex = function(self, name, value)
   if location==nil then
     error("Uniform '"..name.."' not found in program")
   end
+  gl.UseProgram(self.prog)
   gl.Uniform(location, value)
 end
 
@@ -79,9 +80,9 @@ local function compute_normals(vertices, indices)
 end
 
 local function triangle_soup(vertices, indices)
-  local r = array.float {rows=3*#indices, cols=3}
+  local r = array.float {rows=3*indices:rows(), cols=3}
   local v = glm.vec3()
-  for l=1,#indices do
+  for l=1,indices:rows() do
     local i,j,k = indices:get(l,1)+1, indices:get(l,2)+1, indices:get(l,3)+1
     vertices:get_row(i, v)
     r:set_row(3*l-2, v)
@@ -114,15 +115,55 @@ end
 
 vertex_array.triangle_mesh = function(desc)
   if desc.indices~=nil then
-    error("Indexed meshes not supported yet")
-  else -- triangles
+    if desc.normals == 'flat' then
+      desc.vertices = triangle_soup(desc.vertices, desc.indices)
+      desc.normals = flat_normals(desc.vertices)
+      desc.indices = nil
+      return vertex_array.triangle_mesh(desc)
+    elseif desc.normals == 'smooth' then
+      desc.normals = compute_normals(desc.vertices, desc.indices)
+      return vertex_array.triangle_mesh(desc)
+    end
     local vao = gl.GenVertexArray()
     local vbo = gl.GenBuffer()
+    local nbo = gl.GenBuffer()
+    local ebo = gl.GenBuffer()
     gl.BindVertexArray(vao)
     gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
     gl.BufferData(gl.ARRAY_BUFFER, desc.vertices, desc.usage or gl.STATIC_DRAW)
     gl.VertexAttribArray(0, desc.vertices)
     gl.EnableVertexAttribArray(0)
+    gl.BindBuffer(gl.ARRAY_BUFFER, nbo)
+    gl.BufferData(gl.ARRAY_BUFFER, desc.normals, desc.usage or gl.STATIC_DRAW)
+    gl.VertexAttribArray(1, desc.normals)
+    gl.EnableVertexAttribArray(1)
+    gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo)
+    gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, desc.indices, desc.usage or gl.STATIC_DRAW)
+    gl.BindVertexArray(0)
+    local r = {}
+    r.vao = vao
+    r.indices = nil
+    r.count = 3*desc.indices:rows()
+    setmetatable(r, vertex_array)
+    return r
+  else -- triangles
+    if desc.normals=="flat" then
+      desc.normals = flat_normals(desc.vertices)
+    elseif desc.normals=="smooth" then
+      error("Cannot compute smooth normals without indices")
+    end
+    local vao = gl.GenVertexArray()
+    local vbo = gl.GenBuffer()
+    local nbo = gl.GenBuffer()
+    gl.BindVertexArray(vao)
+    gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
+    gl.BufferData(gl.ARRAY_BUFFER, desc.vertices, desc.usage or gl.STATIC_DRAW)
+    gl.VertexAttribArray(0, desc.vertices)
+    gl.EnableVertexAttribArray(0)
+    gl.BindBuffer(gl.ARRAY_BUFFER, nbo)
+    gl.BufferData(gl.ARRAY_BUFFER, desc.normals, desc.usage or gl.STATIC_DRAW)
+    gl.VertexAttribArray(1, desc.normals)
+    gl.EnableVertexAttribArray(1)
     gl.BindVertexArray(0)
     local r = {}
     r.vao = vao
@@ -230,4 +271,51 @@ app.loop = function(self)
   end
 end
 
-return { program = program, vertex_array = vertex_array, app = app }
+local arcball = {}
+
+arcball.new = function()
+  local r = {}
+  r.rotation = glm.quat(1,0,0,0)
+  setmetatable(r, arcball)
+  return r
+end
+
+arcball.__index = arcball
+
+arcball.reset = function(self, width, height)
+  self.width = width
+  self.height = height
+  self.center = glm.vec3(width/2, height/2, 0)
+  self.radius = math.min(width, height)/2
+  self.rotation = glm.quat(1,0,0,0)
+end
+
+arcball.project = function(self, x, y)
+  local v = glm.vec3(x,self.height - y,0) - self.center
+  local d2 = v:dot(v)
+  if d2 < self.radius*self.radius then
+    v[3] = math.sqrt(self.radius*self.radius - d2)
+  end
+  v = glm.normalize(v)
+  return v
+end
+
+arcball.drag = function(self, x1, y1, x2, y2)
+  local v1 = self:project(x1,y1)
+  local v2 = self:project(x2,y2)
+  if v1:dot(v2) > 0.999999 then
+    return glm.quat(1,0,0,0)
+  elseif v1:dot(v2) < -0.999999 then
+    return glm.quat_rotation_around(math.pi, glm.vec3(1,0,0))
+  else
+    self.rotation = glm.quat_mul(
+      glm.quat_rotation_between(v2, v1), self.rotation
+    )
+  end
+end
+
+arcball.matrix = function(self)
+  return glm.quat_rotation_matrix(self.rotation)
+end
+
+return { program = program, vertex_array = vertex_array, app = app, arcball = arcball }
